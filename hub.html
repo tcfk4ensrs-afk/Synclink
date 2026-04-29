@@ -11,7 +11,7 @@
         #map { width: 100%; height: 70vh; }
         #ui-panel { height: 30vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: white; border-top: 3px solid var(--main-blue); }
         .info-text { font-size: 1rem; color: var(--main-blue); margin-bottom: 20px; font-weight: bold; }
-        .btn-search { padding: 15px 40px; background: var(--main-blue); color: #000; border: none; font-weight: bold; border-radius: 30px; text-decoration: none; font-size: 1.2rem; }
+        .btn-search { padding: 15px 40px; background: var(--main-blue); color: #000; border: none; font-weight: bold; border-radius: 30px; text-decoration: none; font-size: 1.2rem; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -19,7 +19,7 @@
 <div id="map"></div>
 <div id="ui-panel">
     <div class="info-text" id="progress-info">SYSTEM READY</div>
-    <a href="search.html" class="btn-search" id="action-btn">探索を開始する</a>
+    <button class="btn-search" id="action-btn" onclick="handleMainAction()">探索を開始する</button>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -28,70 +28,75 @@
     const origin = JSON.parse(localStorage.getItem('tetra_origin'));
     const currentStep = parseInt(localStorage.getItem('tetra_current_step') || "0");
 
-    // Hubは自由に拡大縮小・移動が可能
-    const map = L.map('map', { 
-        zoomControl: true 
-    }).setView([origin.lat, origin.lon], 14);
-    
+    // Hubマップ初期化
+    const map = L.map('map', { zoomControl: true }).setView([origin.lat, origin.lon], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // 原点マーカー
-    L.circleMarker([origin.lat, origin.lon], {
+    // --- 原点マーカーのワープ機能 ---
+    const originMarker = L.circleMarker([origin.lat, origin.lon], {
         radius: 10, color: 'blue', fillColor: '#00f2ff', fillOpacity: 0.9
-    }).addTo(map).bindPopup("<b>START / ORIGIN</b>");
+    }).addTo(map);
+    
+    // 原点ポップアップ
+    let originPopup = `<div style="text-align:center; color:#000;"><b>START / ORIGIN</b><br>`;
+    if (currentStep >= 3) {
+        originPopup += `<p style="font-size:0.8rem;">全地点の同期完了</p>`;
+        originPopup += `<button onclick="warpToRitual()" style="width:100%; padding:5px; cursor:pointer; background:gold; border:none; font-weight:bold;">最終同期へワープ</button>`;
+    } else {
+        originPopup += `<p style="font-size:0.8rem;">ここが全ての始まりの場所です</p>`;
+    }
+    originPopup += `</div>`;
+    originMarker.bindPopup(originPopup);
 
-    // 到達済みのCPだけを表示
+    // 到達済みのCPを表示
     for (let i = 0; i < currentStep; i++) {
         const cp = cps[i];
-        const marker = L.circle([cp.lat, cp.lon], {
-            radius: 40, color: "green", fillOpacity: 0.5
-        }).addTo(map);
-
+        const marker = L.circle([cp.lat, cp.lon], { radius: 40, color: "green", fillOpacity: 0.5 }).addTo(map);
         const photo = localStorage.getItem(`tetra_photo_${i+1}`);
         
-        // ワープ機能のロック判定
-        let popupContent = `
-            <div style="text-align:center; color:#000;">
-                <b>CHECKPOINT ${i+1}</b><br>
-                <img src="${photo}" style="width:120px; margin:5px 0;"><br>`;
-        
+        let popupContent = `<div style="text-align:center; color:#000;"><b>CHECKPOINT ${i+1}</b><br><img src="${photo}" style="width:120px; margin:5px 0;"><br>`;
         if (currentStep >= 3) {
-            // CP3クリア済みならワープボタンを表示
-            popupContent += `<button onclick="warp(${i})" style="width:100%; padding:5px; cursor:pointer; background:var(--main-blue); border:none; font-weight:bold;">WARP</button>`;
+            popupContent += `<button onclick="warpToCP(${i})" style="width:100%; padding:5px; cursor:pointer; background:var(--main-blue); border:none; font-weight:bold;">WARP</button>`;
         } else {
-            // 未クリアならロック中メッセージを表示
             popupContent += `<div style="font-size:0.7rem; color:red; font-weight:bold;">WARP LOCK: CP3制覇で解放</div>`;
         }
-        
         popupContent += `</div>`;
         marker.bindPopup(popupContent);
     }
 
-    // UIパネルの更新
+    // UIパネル更新
     const infoPanel = document.getElementById('progress-info');
     const actionBtn = document.getElementById('action-btn');
 
     if (currentStep >= 3) {
         infoPanel.innerText = `到達状況: ${currentStep} / 3 (ALL CLEAR)`;
-        infoPanel.style.color = "gold";
-        actionBtn.innerText = "最終確認を終了";
+        actionBtn.innerText = "最終同期を開始";
     } else {
         infoPanel.innerText = `到達状況: ${currentStep} / 3 地点`;
     }
 
-    function warp(stepIndex) {
-        // 安全策として関数内でも再判定
-        if (currentStep < 3) {
-            alert("能力「WARP」はまだロックされています。");
-            return;
+    // 下部ボタン：探索または儀式
+    function handleMainAction() {
+        if (currentStep >= 3) {
+            warpToRitual();
+        } else {
+            location.href = 'search.html';
         }
+    }
 
-        if(confirm(`CP${stepIndex+1} へワープ（再挑戦）しますか？`)) {
-            // ステップに合わせて飛ばすファイルを決定
+    // 最終儀式（原点ワープ）実行
+    function warpToRitual() {
+        if (confirm("全ての地点が同期されました。原点へ戻り、最終同期を開始しますか？")) {
+            location.href = 'search.html'; // search側のstep=3判定により儀式画面へ
+        }
+    }
+
+    // 各CPへのワープ
+    function warpToCP(stepIndex) {
+        if(confirm(`CP${stepIndex+1} へワープしますか？`)) {
             let targetPage = "riddle.html";
             if (stepIndex === 1) targetPage = "riddle2.html";
             if (stepIndex === 2) targetPage = "riddle3.html";
-            
             location.href = `${targetPage}?step=${stepIndex}`;
         }
     }
