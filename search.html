@@ -6,14 +6,14 @@
     <title>Tetra-Sync Search</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; --overlay-bg: rgba(0, 242, 255, 0.1); }
+        :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; --overlay-bg: rgba(0, 242, 255, 0.15); }
         body { margin: 0; font-family: 'Courier New', monospace; background: #000; color: white; overflow: hidden; height: 100vh; }
         
         #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; z-index: 1000; position: relative; background: #000; }
         .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; }
 
         #game-screen { display: none; width: 100vw; height: 100vh; position: relative; }
-        #map { width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; } /* マップ操作を無効化 */
+        #map { width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; }
 
         /* ダウジングUI */
         #dowser-ui { width: 100%; height: 100%; display: none; align-items: center; justify-content: center; position: relative; }
@@ -23,23 +23,25 @@
         }
         @keyframes pulse { 0% { width: 50px; height: 50px; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
 
-        /* スキャンボタン（押しやすい位置） */
+        /* スキャンボタン（スマホで押しやすい下部固定） */
         #scan-btn { 
             position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%);
-            width: 70%; padding: 20px; font-size: 1.4rem; background: rgba(0, 0, 0, 0.9);
+            width: 75%; padding: 22px; font-size: 1.4rem; background: rgba(0, 0, 0, 0.9);
             color: var(--main-blue); border: 3px solid var(--main-blue); border-radius: 50px;
-            z-index: 500; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px var(--main-blue);
+            z-index: 500; font-weight: bold; cursor: pointer; box-shadow: 0 0 20px var(--main-blue);
+            transition: all 0.2s;
         }
-        #scan-btn:active { background: var(--main-blue); color: #000; }
-        #scan-btn:disabled { border-color: #555; color: #555; box-shadow: none; }
+        #scan-btn:active { background: var(--main-blue); color: #000; transform: translateX(-50%) scale(0.95); }
+        #scan-btn:disabled { border-color: #444; color: #444; box-shadow: none; }
 
         /* スキャン中オーバーレイ */
         #scanning-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--overlay-bg); display: none; z-index: 400;
-            pointer-events: none; border: 2px solid var(--main-blue); box-sizing: border-box;
+            pointer-events: none; border: 4px solid var(--main-blue); box-sizing: border-box;
         }
 
+        /* 距離表示（2台目解析モード） */
         #distance-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--analyze-orange); display: none;
@@ -61,7 +63,8 @@
 <div id="game-screen">
     <div id="scanning-overlay"></div>
     <div id="map"></div>
-    <div id="dowser-ui"></div> <button id="scan-btn" onclick="performScan()">SCAN START</button>
+    <div id="dowser-ui"></div>
+    <button id="scan-btn" onclick="performScan()">SCAN START</button>
     <div id="distance-overlay">
         <p>DISTANCE TO TARGET</p>
         <div id="dist-num">0.0m</div>
@@ -101,7 +104,7 @@
     }
 
     function initMap(target) {
-        // ズーム・ドラッグを無効化
+        // 初期視点を [0,0] にすることで目的地バレを防ぐ
         map = L.map('map', { 
             zoomControl: false, 
             attributionControl: false,
@@ -110,10 +113,18 @@
             scrollWheelZoom: false,
             doubleClickZoom: false,
             boxZoom: false
-        }).setView([target.lat, target.lon], 18);
+        }).setView([0, 0], 18);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        targetMarker = L.circle([target.lat, target.lon], { radius: 15, color: 'red', fillOpacity: 0.8 }).addTo(map);
+
+        // 目的地マーカー（透明度0で隠蔽）
+        targetMarker = L.circle([target.lat, target.lon], { 
+            radius: 15, 
+            color: 'red', 
+            stroke: false,
+            fillOpacity: 0 
+        }).addTo(map);
+
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
@@ -122,7 +133,6 @@
         const btn = document.getElementById('scan-btn');
         const overlay = document.getElementById('scanning-overlay');
         
-        // 状態更新
         btn.disabled = true;
         btn.innerText = "SCANNING...";
         overlay.style.display = "block";
@@ -142,10 +152,9 @@
             if (mode === 'navigator') updateNavigator(lat, lon, bearing, target);
             if (mode === 'dowser') startDowsingEffect(currentDist);
 
-            // 完了フィードバック
+            // フィードバック振動
             if (navigator.vibrate) navigator.vibrate(100);
             
-            // 成功判定
             if (currentDist <= 15) {
                 btn.innerText = "ENTER MISSION";
                 btn.style.background = "#ff4500";
@@ -156,10 +165,10 @@
                     btn.disabled = false;
                     btn.innerText = "SCAN START";
                     overlay.style.display = "none";
-                }, 1000);
+                }, 1200);
             }
         }, (err) => {
-            alert("GPS取得失敗: " + err.message);
+            alert("GPS Error: " + err.message);
             btn.disabled = false;
             btn.innerText = "SCAN START";
             overlay.style.display = "none";
@@ -168,28 +177,28 @@
 
     function startDowsingEffect(dist) {
         const ui = document.getElementById('dowser-ui');
-        ui.innerHTML = ''; // リセット
+        ui.innerHTML = ''; 
         
-        // 距離に応じてアニメーション速度（間隔）を変更
-        // 近いほど速い（0.5s〜3.0sの間で可変）
-        let speed = Math.max(0.5, Math.min(3.0, dist / 100));
+        // 距離が近いほど波紋の間隔を短く（0.4s〜2.5s）
+        let intervalTime = Math.max(0.4, Math.min(2.5, dist / 120));
 
         function createRipple() {
             const r = document.createElement('div');
             r.className = 'ripple';
-            r.style.animationDuration = '2s';
             ui.appendChild(r);
             setTimeout(() => r.remove(), 2000);
         }
 
-        // 15秒間だけ波紋を生成
         if (rippleInterval) clearInterval(rippleInterval);
         createRipple();
-        rippleInterval = setInterval(createRipple, speed * 1000);
+        rippleInterval = setInterval(createRipple, intervalTime * 1000);
         
+        // 15秒で自動停止
         setTimeout(() => {
-            clearInterval(rippleInterval);
-            rippleInterval = null;
+            if (rippleInterval) {
+                clearInterval(rippleInterval);
+                rippleInterval = null;
+            }
         }, 15000);
     }
 
@@ -197,7 +206,7 @@
         const pos = [lat, lon];
         userMarker.setLatLng(pos);
         targetMarker.setLatLng([target.lat, target.lon]);
-        map.panTo(pos); // スムーズに移動
+        map.panTo(pos); // 自分の位置にフォーカス
         
         const radius = 0.0006; 
         const points = [ pos ];
@@ -216,7 +225,8 @@
 
     function calculateDistance(lat1, lon1, lat2, lon2) {
         const R = 6371000;
-        const dLat = (lat2-lat1)*Math.PI/180; const dLon = (lon2-lon1)*Math.PI/180;
+        const dLat = (lat2-lat1)*Math.PI/180;
+        const dLon = (lon2-lon1)*Math.PI/180;
         const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
