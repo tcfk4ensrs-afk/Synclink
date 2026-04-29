@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Riddle Screen</title>
+    <style>body { background: #000; color: white; text-align: center; padding: 50px; }</style>
+</head>
+<body>
+    <h1 id="title">MISSION</h1>
+    <div id="game-area">
+        <p>ここに問題が表示されます</p>
+        <button onclick="clearMission()">クリアしたことにする(テスト用)</button>
+    </div>
+
+    <script>
+        const step = new URLSearchParams(location.search).get('step');
+        document.getElementById('title').innerText = `MISSION ${parseInt(step) + 1}`;
+
+        function clearMission() {
+            let nextStep = parseInt(step) + 1;
+            localStorage.setItem('tetra_current_step', nextStep);
+            
+            if (nextStep >= 3) {
+                alert("全てのチェックポイントを制覇！原点へ戻れ。");
+                // 原点に戻るステップなどは別途実装
+            } else {
+                alert("クリア！次の地点がアンロックされました。");
+                location.href = 'search.html';
+            }
+        }
+    </script>
+</body>
+</html>
