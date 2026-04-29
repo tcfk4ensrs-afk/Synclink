@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetra-Sync | Hub</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --main-blue: #00f2ff; }
+        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; }
+        #map { width: 100%; height: 75vh; filter: brightness(0.8) contrast(1.2); }
+        #ui-panel { height: 25vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; border-top: 1px solid var(--main-blue); }
+        .info-text { font-size: 0.9rem; color: var(--main-blue); margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; }
+        .btn-search { padding: 15px 40px; background: transparent; color: var(--main-blue); border: 2px solid var(--main-blue); font-weight: bold; border-radius: 30px; text-decoration: none; box-shadow: 0 0 10px var(--main-blue); }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="ui-panel">
+    <div class="info-text" id="progress-info">-- DATA ENCRYPTED --</div>
+    <a href="search.html" class="btn-search">SEARCH NEXT POINT</a>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // データの読み込み
+    const cps = JSON.parse(localStorage.getItem('tetra_cps'));
+    const origin = JSON.parse(localStorage.getItem('tetra_origin'));
+    const currentStep = parseInt(localStorage.getItem('tetra_current_step') || "0");
+
+    // マップ初期化（原点を中心に）
+    const map = L.map('map', { zoomControl: false }).setView([origin.lat, origin.lon], 14);
+    
+    // ダークな地図タイル
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+    // 1. 原点は常に表示
+    L.circleMarker([origin.lat, origin.lon], {
+        radius: 10, color: var(--main-blue), fillColor: var(--main-blue), fillOpacity: 0.8
+    }).addTo(map).bindPopup("ORIGIN (BASE)");
+
+    // 2. クリア済みのCPのみを表示（ワープ可能）
+    for (let i = 0; i < currentStep; i++) {
+        const cp = cps[i];
+        
+        // 訪問済みの印（緑色）
+        const marker = L.circle([cp.lat, cp.lon], {
+            radius: 50, color: "#00ff88", weight: 2, fillOpacity: 0.3
+        }).addTo(map);
+
+        // クリア済み写真をポップアップで見せる演出（おまけ）
+        const photo = localStorage.getItem(`tetra_photo_${i+1}`);
+        const popupContent = `
+            <div style="color:#000; text-align:center;">
+                <b>CP ${i+1} CLEARED</b><br>
+                <img src="${photo}" style="width:100px; border-radius:5px;"><br>
+                <button onclick="warpTo(${i})" style="margin-top:5px; cursor:pointer;">WARP</button>
+            </div>`;
+        marker.bindPopup(popupContent);
+    }
+
+    // 3. 次の目的地は「気配」すら出さない（search.htmlで自力で見つけるため）
+
+    // UI更新
+    const status = currentStep >= 3 ? "SYSTEM COMPLETE" : `STATIONS FOUND: ${currentStep} / 3`;
+    document.getElementById('progress-info').innerText = status;
+
+    function warpTo(stepIndex) {
+        if (confirm(`CP${stepIndex+1} へ転送を開始しますか？`)) {
+            location.href = `riddle.html?step=${stepIndex}`;
+        }
+    }
+</script>
+</body>
+</html>
