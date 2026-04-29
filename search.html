@@ -53,9 +53,9 @@
             z-index: 600;
         }
         body.analyze #distance-overlay { display: flex; }
-        #dist-num { font-size: 5rem; font-weight: bold; }
+        #analyze-text { font-size: 2rem; font-weight: bold; letter-spacing: 0.2em; }
         
-        #info-panel { position: absolute; top: 10px; left: 10px; z-index: 100; font-size: 0.8rem; background: rgba(0,0,0,0.5); padding: 5px; }
+        #info-panel { position: absolute; top: 10px; left: 10px; z-index: 100; font-size: 0.8rem; background: rgba(0,0,0,0.5); padding: 5px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -74,8 +74,7 @@
     <button id="scan-btn" onclick="performScan()">SCAN START</button>
     
     <div id="distance-overlay">
-        <p>DISTANCE TO TARGET</p>
-        <div id="dist-num">0.0m</div>
+        <div id="analyze-text">ANALYZING...</div>
     </div>
 </div>
 
@@ -86,7 +85,6 @@
     let currentDist = 0;
     let rippleInterval = null;
 
-    // LocalStorageから座標と進捗を取得
     function getGameData() {
         const cps = JSON.parse(localStorage.getItem('tetra_cps'));
         const step = parseInt(localStorage.getItem('tetra_current_step') || "0");
@@ -108,7 +106,6 @@
             document.getElementById('dowser-ui').style.display = 'flex';
         }
 
-        // 3本指タップイベント（ダウジング機のみ有効）
         window.addEventListener('touchstart', (e) => {
             if (mode === 'dowser' && e.touches.length === 3) document.body.classList.add('analyze');
         });
@@ -116,7 +113,6 @@
     }
 
     function initMap(target) {
-        // マップ設定：ズーム・移動不可
         map = L.map('map', { 
             zoomControl: false, attributionControl: false,
             dragging: false, touchZoom: false, scrollWheelZoom: false,
@@ -125,11 +121,8 @@
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // 目的地（初期は透明）
         targetMarker = L.circle([target.lat, target.lon], { radius: 15, stroke: false, fillOpacity: 0 }).addTo(map);
-        // 現在地
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
-        // 扇形
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
 
@@ -149,28 +142,22 @@
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
             
-            // 距離と方位の計算
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
 
-            // 共通：距離数値を更新
-            document.getElementById('dist-num').innerText = `${currentDist.toFixed(1)}m`;
-            info.innerText = `Mission: CP${step+1} | Dist: ${currentDist.toFixed(1)}m`;
+            // 左上パネルの更新（距離表示を削除）
+            info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
 
-            // ナビゲーター機の処理
             if (mode === 'navigator') {
                 updateNavigatorUI(lat, lon, bearing, target);
             }
             
-            // ダウジング機の処理
             if (mode === 'dowser') {
                 startDowsingRipple(currentDist);
             }
 
-            // 共通フィードバック
             if (navigator.vibrate) navigator.vibrate(100);
             
-            // 到着判定 (15m以内)
             if (currentDist <= 15) {
                 btn.innerText = "ENTER MISSION";
                 btn.style.background = "#ff4500";
@@ -194,7 +181,7 @@
         const pos = [lat, lon];
         userMarker.setLatLng(pos);
         targetMarker.setLatLng([target.lat, target.lon]);
-        map.panTo(pos); // 自分の現在地に地図を合わせる
+        map.panTo(pos);
         
         const radius = 0.0006; 
         const points = [ pos ];
@@ -214,22 +201,16 @@
     function startDowsingRipple(dist) {
         const ui = document.getElementById('dowser-ui');
         ui.innerHTML = ''; 
-        
-        // 距離が近いほど波紋を速く出す (0.4s 〜 2.5s)
         let intervalTime = Math.max(0.4, Math.min(2.5, dist / 120));
-
         const create = () => {
             const r = document.createElement('div');
             r.className = 'ripple';
             ui.appendChild(r);
             setTimeout(() => r.remove(), 2000);
         };
-
         if (rippleInterval) clearInterval(rippleInterval);
         create();
         rippleInterval = setInterval(create, intervalTime * 1000);
-        
-        // 15秒間だけ表示
         setTimeout(() => {
             if (rippleInterval) { clearInterval(rippleInterval); rippleInterval = null; }
         }, 15000);
