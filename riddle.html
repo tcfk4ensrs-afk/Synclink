@@ -65,22 +65,22 @@
 
     // --- ミッションクリア処理 ---
     function clearMission() {
-        alert("ミッションクリア！");
-        const nextStep = step + 1;
+        // CP1(step 0) をクリアした瞬間の処理
+        if (step === 0) {
+            // 能力解放の通知
+            alert("【MISSION 01 COMPLETE】\n\n【SYSTEM UPGRADE】\n能力：JUMP が解放されました！\n\n[操作方法]\nsearch画面で『上スワイプ』をすると、30秒間だけ高度を上げ、広域マップを確認できます。");
+            
+            // 進捗を1に更新
+            localStorage.setItem('tetra_current_step', 1);
+        } else {
+            // もしこのファイルを他のステップで使い回す場合の汎用処理
+            alert("ミッションクリア！");
+            localStorage.setItem('tetra_current_step', step + 1);
+        }
         
-        // 進捗をLocalStorageに保存
-        localStorage.setItem('tetra_current_step', nextStep);
-        
-        // 探索画面に戻る
-        location.href = 'search.html';
+        // クリア後はHubに戻って全体図を確認させる
+        location.href = 'hub.html';
     }
-    function finish() {
-    // 演出用ポップアップ
-    alert("【SYSTEM UPGRADE】\n能力：JUMP が解放されました！\n\n[操作方法]\nsearch画面で『上スワイプ』をすると、30秒間だけ高度を上げ、広域マップを確認できます。");
-    
-    localStorage.setItem('tetra_current_step', 1);
-    location.href = 'hub.html';
-}
 </script>
 </body>
 </html>
