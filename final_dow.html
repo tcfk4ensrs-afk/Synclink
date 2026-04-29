@@ -6,17 +6,16 @@
     <title>FINAL SYNC | DOWSER</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* ナビ用と共通 */
+        /* ナビ用とほぼ共通のスタイル */
         :root { --main-blue: #00f2ff; }
         body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; }
         #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.6; pointer-events: none; }
-        #ui-layer { position: relative; z-index: 10; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.3); pointer-events: none; }
+        #ui-layer { position: relative; z-index: 10; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2); pointer-events: none; }
         #timer { font-size: 3rem; color: #ff4500; }
-        .ritual-overlay { background: rgba(0,0,0,0.8); border: 2px solid var(--main-blue); padding: 20px; width: 85%; box-sizing: border-box; display: none; pointer-events: auto; }
-        .target-code { font-size: 2.5rem; color: gold; font-weight: bold; margin: 10px 0; }
+        .ritual-overlay { background: rgba(0,0,0,0.85); border: 2px solid var(--main-blue); padding: 25px; width: 85%; box-sizing: border-box; display: none; pointer-events: auto; text-align: center; border-radius: 15px; }
+        .target-code { font-size: 2.5rem; color: gold; font-weight: bold; margin: 15px 0; }
         input { background: #111; border: 2px solid var(--main-blue); color: white; font-size: 2rem; width: 90%; text-align: center; margin-top: 15px; }
-        #guide-msg { font-size: 1.2rem; color: var(--main-blue); animation: blink 1.5s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        #progress { margin-bottom: 20px; font-size: 1.2rem; letter-spacing: 2px; }
     </style>
 </head>
 <body>
@@ -24,16 +23,15 @@
     <div id="map"></div>
     <div id="ui-layer">
         <div id="timer">60</div>
-        <div id="progress" style="margin-bottom: 20px;">ALTITUDE: 100m</div>
-        <div id="guide-msg">SWIPE UP TO SYNC</div>
+        <div id="progress">ALTITUDE: 100m</div>
 
         <div id="input-area" class="ritual-overlay">
             <div style="font-size: 0.8rem; color: #888;">相方に伝えろ（NAV CODE）</div>
             <div class="target-code" id="send-code">----</div>
-            <hr border="1" color="#333">
+            <hr border="1" color="#333" style="margin: 15px 0;">
             <div style="font-size: 0.8rem; color: #888;">相方から聞け（DOWSER CODE）</div>
             <input type="number" id="input-code" placeholder="0000" pattern="\d*">
-            <p style="font-size: 0.7rem; margin-top: 10px;">入力後、再度上スワイプで認証</p>
+            <p style="font-size: 0.7rem; margin-top: 15px; color: var(--main-blue);">入力後、再度上スワイプで認証</p>
         </div>
     </div>
 
@@ -48,7 +46,7 @@
     let isWaitingInput = false;
     let map;
 
-    const origin = JSON.parse(localStorage.getItem('tetra_origin'));
+    const origin = JSON.parse(localStorage.getItem('tetra_origin')) || {lat: 35.6812, lon: 139.7671};
     map = L.map('map', { zoomControl: false, attributionControl: false }).setView([origin.lat, origin.lon], 18);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -66,7 +64,6 @@
 
     function handleSwipe() {
         if (!isWaitingInput) {
-            document.getElementById('guide-msg').style.display = "none";
             document.getElementById('input-area').style.display = "block";
             document.getElementById('send-code').innerText = codes[step].nav;
             isWaitingInput = true;
@@ -78,7 +75,7 @@
     function verifyCode() {
         if (document.getElementById('input-code').value === codes[step].dow) {
             step++;
-            map.setZoom(18 - step);
+            map.setZoom(18 - (step * 1.5));
             document.getElementById('progress').innerText = `ALTITUDE: ${100 + step*500}m`;
             if (step >= 5) {
                 alert("同期完了！");
@@ -87,7 +84,6 @@
             } else {
                 isWaitingInput = false;
                 document.getElementById('input-area').style.display = "none";
-                document.getElementById('guide-msg').style.display = "block";
                 document.getElementById('input-code').value = "";
             }
         } else {
