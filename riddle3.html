@@ -11,7 +11,7 @@
         
         /* 蓄光文字の演出 */
         #secret-msg { 
-            font-size: 3rem; color: #000; text-shadow: none; transition: 0.5s; 
+            font-size: 3rem; color: #010101; text-shadow: none; transition: 0.5s; 
             letter-spacing: 0.5em;
         }
         body.darkness #secret-msg { 
@@ -33,7 +33,7 @@
         <div id="secret-msg">TRIANGLE</div>
         
         <p style="margin-top: 40px; font-size: 0.8rem;">背面カメラを手で完全に塞いでください</p>
-        <button id="finish-btn" style="display:none; margin-top:20px; padding:15px; border:2px solid #afff00; background:none; color:#afff00;" onclick="complete()">ミッション完了</button>
+        <button id="finish-btn" style="display:none; margin-top:20px; padding:15px; border:2px solid #afff00; background:none; color:#afff00;" onclick="complete()">合言葉を確認した</button>
     </div>
 
     <video id="v" autoplay playsinline></video>
@@ -50,19 +50,18 @@
             video.srcObject = stream;
 
             setInterval(() => {
-                canvas.width = 10; // 低解像度で十分
+                canvas.width = 10;
                 canvas.height = 10;
                 ctx.drawImage(video, 0, 0, 10, 10);
                 const data = ctx.getImageData(0, 0, 10, 10).data;
                 
-                // 平均輝度を計算
                 let brightness = 0;
                 for (let i = 0; i < data.length; i += 4) {
                     brightness += (data[i] + data[i+1] + data[i+2]) / 3;
                 }
                 brightness /= (data.length / 4);
 
-                if (brightness < 30) { // 一定以下で「闇」と判定
+                if (brightness < 30) {
                     document.body.classList.add('darkness');
                     document.getElementById('light-level').innerText = "闇を確認。封印が解けました。";
                     document.getElementById('finish-btn').style.display = 'block';
@@ -75,8 +74,13 @@
     }
 
     function complete() {
-        alert("全てのチェックポイントを制覇しました。原点（Hub）に戻り、最後の儀式を行ってください。");
+        // 最終能力解放のポップアップ通知
+        alert("【ALL MISSION COMPLETE】\n\n【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！\n\n[操作方法]\nhub画面の地図上のマーカーをタップすることで、過去の地点へ自由に転送（ワープ）することが可能です。\n\n全ての地点は同期されました。Hubに戻り、最後の儀式を。");
+
+        // 進捗を3（全制覇）に更新
         localStorage.setItem('tetra_current_step', 3);
+        
+        // Hub画面へ戻る
         location.href = 'hub.html';
     }
 
