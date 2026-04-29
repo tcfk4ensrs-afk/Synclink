@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetra-Sync Minimal</title>
+    <style>
+        :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; }
+        body { margin: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: white; overflow: hidden; transition: background 0.3s; }
+        
+        /* 役割選択画面 */
+        #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; }
+        .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; }
+
+        /* メイン画面 */
+        #game-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; position: relative; }
+        
+        /* 1台目：扇形ポインター */
+        #pointer-container { transition: transform 0.1s; display: none; }
+        #cone { width: 0; height: 0; border-left: 40px solid transparent; border-right: 40px solid transparent; border-bottom: 120px solid var(--main-blue); filter: drop-shadow(0 0 15px var(--main-blue)); }
+
+        /* 2台目：ダウジング波紋 */
+        #ripple-container { display: none; }
+        .ripple { width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { width: 50px; height: 50px; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
+
+        /* 解析モード（3本指タップ） */
+        body.analyze { background: var(--analyze-orange); }
+        #distance-val { font-size: 4rem; display: none; z-index: 10; }
+        body.analyze #distance-val { display: block; }
+        body.analyze #visual-elements { display: none; }
+
+        #debug-info { position: absolute; bottom: 10px; font-size: 0.7rem; color: #444; width: 100%; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <h1 style="color: var(--main-blue);">TETRA-SYNC</h1>
+    <button class="mode-btn" onclick="startApp('navigator')">1台目：ナビゲーター</button>
+    <button class="mode-btn" onclick="startApp('dowser')">2台目：ダウジング</button>
+    <p style="font-size: 0.8rem; opacity: 0.6;">※屋外で2台並べて開始してください</p>
+</div>
+
+<div id="game-screen">
+    <div id="visual-elements">
+        <div id="pointer-container"><div id="cone"></div></div>
+        <div id="ripple-container"><div class="ripple"></div><div class="ripple" style="animation-delay: 1s;"></div></div>
+        <p id="label-text" style="margin-top: 20px; color: var(--main-blue);"></p>
+    </div>
+
+    <div id="distance-val">0.0m</div>
+
+    <div id="debug-info">Waiting for sensors...</div>
+</div>
+
+<script>
+    let appMode = '';
+    const targetPos = { lat: 35.681236, lon: 139.767125 }; // 仮目的地（東京駅）。テスト時は変更してください。
+
+    async function startApp(mode) {
+        appMode = mode;
+        document.getElementById('setup').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'flex';
+        
+        const label = document.getElementById('label-text');
+        if(mode === 'navigator') {
+            document.getElementById('pointer-container').style.display = 'block';
+            label.innerText = "方向を合わせて進め";
+        } else {
+            document.getElementById('ripple-container').style.display = 'block';
+            label.innerText = "3本指タップで解析";
+        }
+
+        // 1. 方位センサーの許可 (iOS対応)
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const permission = await DeviceOrientationEvent.requestPermission();
+                if (permission === 'granted') {
+                    window.addEventListener('deviceorientation', updateOrientation);
+                }
+            } catch (e) { alert("センサー許可に失敗しました"); }
+        } else {
+            window.addEventListener('deviceorientation', updateOrientation);
+        }
+
+        // 2. 位置情報の開始
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(updateLocation, (err) => {
+                document.getElementById('debug-info').innerText = `GPS Error: ${err.message}`;
+            }, { enableHighAccuracy: true });
+        }
+
+        // 3. 3本指タップイベントの登録
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 3) {
+                document.body.classList.add('analyze');
+                if (navigator.vibrate) navigator.vibrate([50]);
+            }
+        });
+        window.addEventListener('touchend', () => {
+            document.body.classList.remove('analyze');
+        });
+    }
+
+    function updateOrientation(e) {
+        // iOSの compassHeading または Androidの alpha
+        const heading = e.webkitCompassHeading || (360 - e.alpha);
+        if (heading && appMode === 'navigator') {
+            document.getElementById('pointer-container').style.transform = `rotate(${heading}deg)`;
+        }
+    }
+
+    function updateLocation(pos) {
+        const myLat = pos.coords.latitude;
+        const myLon = pos.coords.longitude;
+        
+        const dist = calculateDistance(myLat, myLon, targetPos.lat, targetPos.lon);
+        
+        document.getElementById('distance-val').innerText = `${dist.toFixed(1)}m`;
+        document.getElementById('debug-info').innerText = `LAT: ${myLat.toFixed(4)} LON: ${myLon.toFixed(4)}`;
+        
+        // ダウジング機のみ、距離に応じてバイブレーション（20m以内）
+        if (appMode === 'dowser' && dist < 20) {
+            if (navigator.vibrate) navigator.vibrate(200);
+        }
+    }
+
+    // 距離計算ロジック
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; // 地球の半径 (m)
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+</script>
+</body>
+</html>
