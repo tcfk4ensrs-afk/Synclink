@@ -53,25 +53,27 @@
     function getGameData() {
         const cps = JSON.parse(localStorage.getItem('tetra_cps'));
         const step = parseInt(localStorage.getItem('tetra_current_step') || "0");
-        return { cps, step };
+        const origin = JSON.parse(localStorage.getItem('tetra_origin'));
+        return { cps, step, origin };
     }
 
     async function init(selectedMode) {
         mode = selectedMode;
         document.getElementById('setup').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
-        const { cps, step } = getGameData();
+        const { cps, step, origin } = getGameData();
         if (!cps) { alert("データがありません。"); return; }
         
         if (mode === 'navigator') {
             document.getElementById('map').style.display = 'block';
-            initMap(cps[step]);
+            // 全クリア時は原点をターゲットとして地図を初期化
+            const targetPos = (step >= 3) ? origin : cps[step];
+            initMap(targetPos);
             setupJumpGesture();
         } else {
             document.getElementById('dowser-ui').style.display = 'flex';
         }
 
-        // 3本指解析（ANALYZE）機能：step 2以上で解放
         window.addEventListener('touchstart', (e) => { 
             if (mode === 'dowser' && e.touches.length === 3) {
                 const { step } = getGameData();
@@ -109,7 +111,6 @@
         window.addEventListener('touchend', (e) => {
             const touchEndY = e.changedTouches[0].clientY;
             if (mode === 'navigator' && !isJumping && touchStartY - touchEndY > 120) {
-                // JUMP機能：step 1以上で解放
                 const { step } = getGameData();
                 if (step >= 1) {
                     executeJump();
@@ -142,31 +143,54 @@
         if (isJumping) return;
         const btn = document.getElementById('scan-btn'), overlay = document.getElementById('scanning-overlay'), info = document.getElementById('info-panel');
         btn.disabled = true; btn.innerText = "SCANNING..."; overlay.style.display = "block";
-        const { cps, step } = getGameData();
-        const target = cps[step];
+        
+        const { cps, step, origin } = getGameData();
+        const target = (step >= 3) ? origin : cps[step];
 
         navigator.geolocation.getCurrentPosition((pos) => {
             const lat = pos.coords.latitude, lon = pos.coords.longitude;
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
-            info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
+            
+            if (step >= 3) {
+                info.innerText = `FINAL MISSION: RETURN TO ORIGIN\nDistance: ${Math.round(currentDist)}m`;
+            } else {
+                info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
+            }
 
             if (mode === 'navigator') updateNavigatorUI(lat, lon, bearing, target);
             if (mode === 'dowser') startDowsingRipple(currentDist);
             if (navigator.vibrate) navigator.vibrate(100);
             
-            if (currentDist <= 15) {
-                btn.innerText = "ENTER MISSION"; btn.style.background = "#ff4500"; btn.disabled = false;
-                btn.onclick = () => { 
-                    let targetPage = "riddle.html"; 
-                    if (step === 1) targetPage = "riddle2.html";
-                    if (step === 2) targetPage = "riddle3.html";
-                    location.href = `capture.html?step=${step}&next=${targetPage}`; 
-                };
+            // 判定ロジック
+            if (currentDist <= 20) { // 原点またはCPに到着
+                if (step >= 3) {
+                    // 最終儀式（CP4）の発動
+                    alert("原点への帰還を確認。最終同期プロセスを開始します。");
+                    showFinalRitualSetup();
+                } else {
+                    btn.innerText = "ENTER MISSION"; btn.style.background = "#ff4500"; btn.disabled = false;
+                    btn.onclick = () => { 
+                        let targetPage = (step === 1) ? "riddle2.html" : ((step === 2) ? "riddle3.html" : "riddle.html");
+                        location.href = `capture.html?step=${step}&next=${targetPage}`; 
+                    };
+                }
             } else {
                 setTimeout(() => { btn.disabled = false; btn.innerText = "SCAN START"; overlay.style.display = "none"; }, 1200);
             }
         }, (err) => { alert("GPS Error"); btn.disabled = false; overlay.style.display = "none"; }, { enableHighAccuracy: true });
+    }
+
+    function showFinalRitualSetup() {
+        document.getElementById('game-screen').style.display = 'none';
+        const setup = document.getElementById('setup');
+        setup.style.display = 'flex';
+        setup.innerHTML = `
+            <h1 style="color: gold; text-shadow: 0 0 20px gold;">FINAL RITUAL</h1>
+            <p style="color: white; margin-bottom: 30px; text-align:center;">原点にて最終同期を開始します。<br>役割を選択してください。</p>
+            <button class="mode-btn" style="border-color: gold; color: gold;" onclick="location.href='final_nav.html'">1台目：儀式ナビゲーター</button>
+            <button class="mode-btn" style="border-color: gold; color: gold;" onclick="location.href='final_dow.html'">2台目：儀式ダウジング</button>
+        `;
     }
 
     function updateNavigatorUI(lat, lon, bearing, target) {
