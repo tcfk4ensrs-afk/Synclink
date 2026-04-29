@@ -8,43 +8,18 @@
     <style>
         :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; }
         body { margin: 0; font-family: monospace; background: #000; color: white; overflow: hidden; }
-        
-        /* セットアップ画面 */
         #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; z-index: 1000; position: relative; background: #000; }
         .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; }
-
         #game-screen { display: none; width: 100vw; height: 100vh; position: relative; }
-        
-        /* 1台目：地図 */
         #map { width: 100%; height: 100%; z-index: 1; display: none; }
-
-        /* 2台目：ダウジング波紋 */
         #dowser-ui { width: 100%; height: 100%; display: none; align-items: center; justify-content: center; position: relative; }
         .ripple { width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; position: absolute; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { width: 50px; height: 50px; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
-
-        /* スキャンボタン */
-        #scan-btn { 
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            padding: 15px 40px; font-size: 1.2rem; background: rgba(0, 0, 0, 0.9);
-            color: var(--main-blue); border: 2px solid var(--main-blue); border-radius: 30px;
-            z-index: 500; font-weight: bold; cursor: pointer;
-        }
-
-        /* 距離表示（2台目解析モード） */
-        #distance-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--analyze-orange); display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-            z-index: 600;
-        }
+        #scan-btn { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); padding: 15px 40px; font-size: 1.2rem; background: rgba(0, 0, 0, 0.9); color: var(--main-blue); border: 2px solid var(--main-blue); border-radius: 30px; z-index: 500; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        #distance-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--analyze-orange); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 600; }
         body.analyze #distance-overlay { display: flex; }
         #dist-num { font-size: 5rem; font-weight: bold; }
-
-        #info-panel {
-            position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6);
-            padding: 5px 10px; font-size: 0.8rem; z-index: 100;
-        }
+        #info-panel { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 10px; font-size: 0.8rem; z-index: 100; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -57,16 +32,12 @@
 
 <div id="game-screen">
     <div id="info-panel">Waiting for scan...</div>
-    
     <div id="map"></div>
-
     <div id="dowser-ui">
         <div class="ripple"></div>
         <div class="ripple" style="animation-delay: 1s;"></div>
     </div>
-
     <button id="scan-btn" onclick="performScan()">SCAN START</button>
-    
     <div id="distance-overlay">
         <p>DISTANCE TO TARGET</p>
         <div id="dist-num">0.0m</div>
@@ -76,18 +47,31 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     let mode = '';
-    let map, userMarker, sectorPolygon;
-    const targetPos = [35.681236, 139.767125]; // 目的地
+    let map, userMarker, sectorPolygon, targetMarker;
     let currentDist = 0;
+
+    // LocalStorageからデータを取得するヘルパー
+    function getGameData() {
+        const cps = JSON.parse(localStorage.getItem('tetra_cps'));
+        const step = parseInt(localStorage.getItem('tetra_current_step') || "0");
+        return { cps, step };
+    }
 
     async function init(selectedMode) {
         mode = selectedMode;
         document.getElementById('setup').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
 
+        const { cps, step } = getGameData();
+        if (!cps) {
+            alert("スタート地点が登録されていません。index.htmlに戻ります。");
+            location.href = 'index.html';
+            return;
+        }
+
         if (mode === 'navigator') {
             document.getElementById('map').style.display = 'block';
-            initMap();
+            initMap(cps[step]);
         } else {
             document.getElementById('dowser-ui').style.display = 'flex';
         }
@@ -98,68 +82,62 @@
         window.addEventListener('touchend', () => document.body.classList.remove('analyze'));
     }
 
-    function initMap() {
-        map = L.map('map', { zoomControl: false, attributionControl: false }).setView(targetPos, 15);
+    function initMap(target) {
+        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([target.lat, target.lon], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        // 目的地
-        L.circle(targetPos, { radius: 10, color: 'red', fillOpacity: 0.8 }).addTo(map);
-        
-        // ユーザー
+        targetMarker = L.circle([target.lat, target.lon], { radius: 15, color: 'red', fillOpacity: 0.8 }).addTo(map);
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
-        
-        // 扇形
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
 
-   async function performScan() {
-    // localStorageから現在の目的地を読み込む
-    const cps = JSON.parse(localStorage.getItem('tetra_cps'));
-    const step = parseInt(localStorage.getItem('tetra_current_step'));
-    const target = cps[step];
+    async function performScan() {
+        const info = document.getElementById('info-panel');
+        info.innerText = "Scanning GPS...";
 
-    navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        
-        const dist = calculateDistance(lat, lon, target.lat, target.lon);
-        
-        // 到着判定 (15m以内)
-        if (dist <= 15) {
-            document.getElementById('scan-btn').innerText = "ENTER MISSION";
-            document.getElementById('scan-btn').style.background = "#ff4500";
-            document.getElementById('scan-btn').onclick = () => {
-                // 問題画面へ（問題番号をクエリパラメータで渡す）
-                location.href = `riddle.html?step=${step}`;
-            };
-        }
+        const { cps, step } = getGameData();
+        const target = cps[step];
 
-        // ...（以下、地図更新や方位計算の既存コード）...
-    });
-}
-            // 距離計算
-            currentDist = calculateDistance(lat, lon, targetPos[0], targetPos[1]);
+        navigator.geolocation.getCurrentPosition((pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            
+            // 距離と方位の計算
+            currentDist = calculateDistance(lat, lon, target.lat, target.lon);
+            const bearing = calculateBearing(lat, lon, target.lat, target.lon);
+
+            // UI更新
             document.getElementById('dist-num').innerText = `${currentDist.toFixed(1)}m`;
             
-            // 方位計算（現在地から目的地への角度）
-            const bearing = calculateBearing(lat, lon, targetPos[0], targetPos[1]);
-
             if (mode === 'navigator') {
-                updateNavigator(lat, lon, bearing);
+                updateNavigator(lat, lon, bearing, target);
             }
             
-            document.getElementById('info-panel').innerText = `Last Scan: ${new Date().toLocaleTimeString()}\nDist: ${currentDist.toFixed(1)}m`;
-            if (currentDist < 20 && navigator.vibrate) navigator.vibrate(300);
+            info.innerText = `Mission: CP${step + 1}\nLast Scan: ${new Date().toLocaleTimeString()}\nDist: ${currentDist.toFixed(1)}m`;
+
+            // 到着判定 (15m以内)
+            if (currentDist <= 15) {
+                const btn = document.getElementById('scan-btn');
+                btn.innerText = "ENTER MISSION";
+                btn.style.background = "#ff4500";
+                btn.onclick = () => {
+                    location.href = `riddle.html?step=${step}`;
+                };
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            } else if (currentDist < 50 && navigator.vibrate) {
+                navigator.vibrate(300);
+            }
             
-        }, (err) => { alert("GPS Error: " + err.message); }, { enableHighAccuracy: true });
+        }, (err) => { 
+            info.innerText = "GPS Error: " + err.message;
+        }, { enableHighAccuracy: true });
     }
 
-    function updateNavigator(lat, lon, bearing) {
+    function updateNavigator(lat, lon, bearing, target) {
         const pos = [lat, lon];
         userMarker.setLatLng(pos);
+        targetMarker.setLatLng([target.lat, target.lon]); // ターゲット位置も更新
         map.setView(pos, 18);
         
-        // 扇形の描画（磁気センサーではなく計算された方位を使用）
         const radius = 0.0006; 
         const points = [ pos ];
         const startAngle = (bearing - 25);
@@ -167,7 +145,7 @@
 
         for (let i = 0; i <= 10; i++) {
             const angleDeg = startAngle + (endAngle - startAngle) * (i / 10);
-            const angleRad = (90 - angleDeg) * Math.PI / 180; // 地図上の数学的座標に変換
+            const angleRad = (90 - angleDeg) * Math.PI / 180; 
             const ptLat = lat + radius * Math.sin(angleRad);
             const ptLon = lon + radius * Math.cos(angleRad);
             points.push([ptLat, ptLon]);
@@ -175,7 +153,6 @@
         sectorPolygon.setLatLngs(points);
     }
 
-    // 二点間の距離計算
     function calculateDistance(lat1, lon1, lat2, lon2) {
         const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -186,7 +163,6 @@
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    // 二点間の方位（角度）計算
     function calculateBearing(lat1, lon1, lat2, lon2) {
         const y = Math.sin((lon2 - lon1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
         const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
