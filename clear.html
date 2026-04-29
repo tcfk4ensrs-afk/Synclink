@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetra-Sync | COMPLETE</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --main-blue: #00f2ff; --gold: gold; }
+        body { margin: 0; background: #000; color: white; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+        
+        #map { width: 100%; height: 100vh; position: absolute; z-index: 1; transition: opacity 2s; }
+        
+        /* オーバーレイ：写真とクリアメッセージ */
+        #finish-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100; background: rgba(0,0,0,0.8);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 2s;
+        }
+
+        #photo-container {
+            display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center;
+        }
+        .captured-img {
+            width: 80px; height: 80px; border: 2px solid var(--main-blue);
+            object-fit: cover; border-radius: 5px; box-shadow: 0 0 15px var(--main-blue);
+        }
+
+        #clear-text { font-size: 3rem; font-weight: bold; color: var(--gold); text-shadow: 0 0 20px var(--gold); margin-bottom: 10px; }
+        #sub-text { font-size: 1rem; letter-spacing: 0.3em; margin-bottom: 30px; }
+        
+        .home-btn {
+            padding: 15px 40px; background: transparent; border: 2px solid var(--gold);
+            color: var(--gold); font-weight: bold; border-radius: 30px; text-decoration: none;
+            transition: all 0.3s;
+        }
+        .home-btn:hover { background: var(--gold); color: #000; }
+
+        /* 特殊エフェクト：スキャンライン */
+        #scanline {
+            width: 100%; height: 2px; background: rgba(0, 242, 255, 0.5);
+            position: absolute; top: 0; z-index: 50; animation: scan 4s linear infinite;
+        }
+        @keyframes scan { from { top: 0; } to { top: 100%; } }
+    </style>
+</head>
+<body>
+
+    <div id="scanline"></div>
+    <div id="map"></div>
+
+    <div id="finish-overlay">
+        <h1 id="clear-text">MISSION COMPLETE</h1>
+        <p id="sub-text">TETRA-SYNC STABILIZED</p>
+        
+        <div id="photo-container" id="photo-list">
+            </div>
+
+        <a href="index.html" class="home-btn" onclick="localStorage.clear()">システムを初期化して終了</a>
+    </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const cps = JSON.parse(localStorage.getItem('tetra_cps'));
+    const origin = JSON.parse(localStorage.getItem('tetra_origin'));
+    const points = [
+        { lat: origin.lat, lon: origin.lon, label: "CP4 (ORIGIN)" },
+        { lat: cps[0].lat, lon: cps[0].lon, label: "CP1" },
+        { lat: cps[1].lat, lon: cps[1].lon, label: "CP2" },
+        { lat: cps[2].lat, lon: cps[2].lon, label: "CP3" }
+    ];
+
+    const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([origin.lat, origin.lon], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    async function startEnding() {
+        // 1. 各チェックポイントを順番に巡回
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            map.flyTo([p.lat, p.lon], 17, { duration: 2 });
+            
+            await new Promise(r => setTimeout(r, 2200));
+            
+            L.circleMarker([p.lat, p.lon], {
+                radius: 10, color: 'gold', fillColor: '#00f2ff', fillOpacity: 0.8
+            }).addTo(map).bindTooltip(p.label, { permanent: true, direction: 'top' });
+        }
+
+        // 2. 三角錐（ポリゴン）の出現
+        await new Promise(r => setTimeout(r, 1000));
+        map.flyTo([origin.lat, origin.lon], 15, { duration: 3 });
+
+        const polygonCoords = points.map(p => [p.lat, p.lon]);
+        // 最初の点を最後に追加して閉じる
+        polygonCoords.push([origin.lat, origin.lon]);
+
+        L.polygon(polygonCoords, {
+            color: 'gold', weight: 5, fillOpacity: 0.3, fillColor: 'cyan', dashArray: '10, 10'
+        }).addTo(map);
+
+        // 3. クリア画面のオーバーレイ表示
+        await new Promise(r => setTimeout(r, 4000));
+        showFinalOverlay();
+    }
+
+    function showFinalOverlay() {
+        const overlay = document.getElementById('finish-overlay');
+        const container = document.getElementById('photo-container');
+        
+        // 保存された写真を読み込み
+        for (let i = 1; i <= 4; i++) {
+            const photo = localStorage.getItem(`tetra_photo_${i}`);
+            if (photo) {
+                const img = document.createElement('img');
+                img.src = photo;
+                img.className = 'captured-img';
+                container.appendChild(img);
+            }
+        }
+
+        overlay.style.display = 'flex';
+        setTimeout(() => {
+            overlay.style.opacity = '1';
+            document.getElementById('map').style.opacity = '0.3';
+        }, 100);
+    }
+
+    // 演出開始
+    window.onload = () => {
+        setTimeout(startEnding, 1000);
+    };
+</script>
+</body>
+</html>
