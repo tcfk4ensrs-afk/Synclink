@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Tetra-Sync Setup</title>
+    <style>
+        body { background: #000; color: #00f2ff; text-align: center; font-family: monospace; padding-top: 50px; }
+        .btn { padding: 20px; font-size: 1.2rem; border: 2px solid #00f2ff; background: transparent; color: #00f2ff; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>MISSION START</h1>
+    <p>現在地を「原点」として<br>正三角形のフィールドを生成します。</p>
+    <button class="btn" onclick="registerOrigin()">現在地を登録</button>
+
+    <script>
+        function registerOrigin() {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                
+                // 正三角形の頂点を計算 (半径1km = 約0.009度)
+                const r = 0.009; 
+                const cps = [
+                    { lat: lat + r, lon: lon }, // 北
+                    { lat: lat + r * Math.cos(120 * Math.PI / 180), lon: lon + r * Math.sin(120 * Math.PI / 180) }, // 120度
+                    { lat: lat + r * Math.cos(240 * Math.PI / 180), lon: lon + r * Math.sin(240 * Math.PI / 180) }  // 240度
+                ];
+
+                localStorage.setItem('tetra_origin', JSON.stringify({lat, lon}));
+                localStorage.setItem('tetra_cps', JSON.stringify(cps));
+                localStorage.setItem('tetra_current_step', "0");
+
+                alert("フィールド生成完了！探索を開始してください。");
+                location.href = 'search.html';
+            });
+        }
+    </script>
+</body>
+</html>
