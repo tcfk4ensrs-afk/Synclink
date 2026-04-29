@@ -2,32 +2,78 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Riddle Screen</title>
-    <style>body { background: #000; color: white; text-align: center; padding: 50px; }</style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetra-Mission</title>
+    <style>
+        :root { --main-blue: #00f2ff; }
+        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; text-align: center; }
+        
+        #mission-ui { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+        
+        /* 通常時は黒に近い文字で隠蔽 */
+        .hidden-text { color: #010101; font-size: 2rem; font-weight: bold; margin-top: 20px; transition: color 0.1s; filter: blur(1px); }
+        
+        /* 色反転モード (3本指タップ時) */
+        body.inverted { filter: invert(1); background: transparent; }
+        body.inverted .hidden-text { color: red; filter: blur(0); } /* 反転で見えるようになる */
+
+        #clear-btn { display: none; margin-top: 30px; padding: 15px; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); }
+    </style>
 </head>
 <body>
-    <h1 id="title">MISSION</h1>
-    <div id="game-area">
-        <p>ここに問題が表示されます</p>
-        <button onclick="clearMission()">クリアしたことにする(テスト用)</button>
+
+<div id="mission-ui">
+    <h2 id="step-title">MISSION</h2>
+    <p id="hint-text">三本の指で闇を暴き、<br>合言葉を解読せよ。</p>
+    
+    <div id="riddle-content">
+        <p>合言葉は...</p>
+        <div class="hidden-text" id="secret-msg">ネオンの三角錐</div>
     </div>
 
-    <script>
-        const step = new URLSearchParams(location.search).get('step');
-        document.getElementById('title').innerText = `MISSION ${parseInt(step) + 1}`;
+    <button id="clear-btn" onclick="clearMission()">合言葉を確認した</button>
+</div>
 
-        function clearMission() {
-            let nextStep = parseInt(step) + 1;
-            localStorage.setItem('tetra_current_step', nextStep);
-            
-            if (nextStep >= 3) {
-                alert("全てのチェックポイントを制覇！原点へ戻れ。");
-                // 原点に戻るステップなどは別途実装
-            } else {
-                alert("クリア！次の地点がアンロックされました。");
-                location.href = 'search.html';
+<script>
+    const params = new URLSearchParams(location.search);
+    const step = parseInt(params.get('step') || "0");
+    document.getElementById('step-title').innerText = `MISSION ${step + 1}`;
+
+    // --- 第1問（色変え）ギミック ---
+    let clearTimeout = null;
+
+    if (step === 0) { // 第1問の場合
+        // 3本指タップ検知
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 3) {
+                document.body.classList.add('inverted');
+                if (navigator.vibrate) navigator.vibrate(50);
+                
+                // 3秒間反転し続けたらクリアボタンを出す（ヒントを読んだとみなす）
+                clearTimeout = setTimeout(() => {
+                    document.getElementById('clear-btn').style.display = 'block';
+                    document.getElementById('hint-text').innerText = "合言葉を入力せよ（今回はボタンでクリア）";
+                }, 3000);
             }
-        }
-    </script>
+        });
+
+        window.addEventListener('touchend', () => {
+            document.body.classList.remove('inverted');
+            if (clearTimeout) clearTimeout(clearTimeout);
+        });
+    }
+
+    // --- ミッションクリア処理 ---
+    function clearMission() {
+        alert("ミッションクリア！");
+        const nextStep = step + 1;
+        
+        // 進捗をLocalStorageに保存
+        localStorage.setItem('tetra_current_step', nextStep);
+        
+        // 探索画面に戻る
+        location.href = 'search.html';
+    }
+</script>
 </body>
 </html>
