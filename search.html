@@ -3,19 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tetra-Sync Search</title>
+    <title>Tetra-Sync | Search</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; --overlay-bg: rgba(0, 242, 255, 0.15); }
         body { margin: 0; font-family: 'Courier New', monospace; background: #000; color: white; overflow: hidden; height: 100vh; }
         
+        /* 役割選択画面 */
         #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; z-index: 1000; position: relative; background: #000; }
-        .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; }
+        .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; font-weight: bold; }
 
+        /* メインゲーム画面 */
         #game-screen { display: none; width: 100vw; height: 100vh; position: relative; }
+        
+        /* 1台目：ナビ機用（地図） */
         #map { width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; }
 
-        /* ダウジングUI */
+        /* 2台目：ダウジング機用（波紋） */
         #dowser-ui { width: 100%; height: 100%; display: none; align-items: center; justify-content: center; position: relative; }
         .ripple { 
             width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; 
@@ -23,7 +27,7 @@
         }
         @keyframes pulse { 0% { width: 50px; height: 50px; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
 
-        /* スキャンボタン（スマホで押しやすい下部固定） */
+        /* スキャンボタン */
         #scan-btn { 
             position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%);
             width: 75%; padding: 22px; font-size: 1.4rem; background: rgba(0, 0, 0, 0.9);
@@ -31,17 +35,17 @@
             z-index: 500; font-weight: bold; cursor: pointer; box-shadow: 0 0 20px var(--main-blue);
             transition: all 0.2s;
         }
-        #scan-btn:active { background: var(--main-blue); color: #000; transform: translateX(-50%) scale(0.95); }
+        #scan-btn:active { background: var(--main-blue); color: #000; }
         #scan-btn:disabled { border-color: #444; color: #444; box-shadow: none; }
 
-        /* スキャン中オーバーレイ */
+        /* スキャン中演出 */
         #scanning-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--overlay-bg); display: none; z-index: 400;
-            pointer-events: none; border: 4px solid var(--main-blue); box-sizing: border-box;
+            border: 4px solid var(--main-blue); box-sizing: border-box;
         }
 
-        /* 距離表示（2台目解析モード） */
+        /* 2台目用：3本指解析モード */
         #distance-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--analyze-orange); display: none;
@@ -50,6 +54,8 @@
         }
         body.analyze #distance-overlay { display: flex; }
         #dist-num { font-size: 5rem; font-weight: bold; }
+        
+        #info-panel { position: absolute; top: 10px; left: 10px; z-index: 100; font-size: 0.8rem; background: rgba(0,0,0,0.5); padding: 5px; }
     </style>
 </head>
 <body>
@@ -61,10 +67,12 @@
 </div>
 
 <div id="game-screen">
+    <div id="info-panel">Waiting for scan...</div>
     <div id="scanning-overlay"></div>
     <div id="map"></div>
     <div id="dowser-ui"></div>
     <button id="scan-btn" onclick="performScan()">SCAN START</button>
+    
     <div id="distance-overlay">
         <p>DISTANCE TO TARGET</p>
         <div id="dist-num">0.0m</div>
@@ -78,6 +86,7 @@
     let currentDist = 0;
     let rippleInterval = null;
 
+    // LocalStorageから座標と進捗を取得
     function getGameData() {
         const cps = JSON.parse(localStorage.getItem('tetra_cps'));
         const step = parseInt(localStorage.getItem('tetra_current_step') || "0");
@@ -90,6 +99,8 @@
         document.getElementById('game-screen').style.display = 'block';
 
         const { cps, step } = getGameData();
+        if (!cps) { alert("データがありません。index.htmlから始めてください。"); return; }
+
         if (mode === 'navigator') {
             document.getElementById('map').style.display = 'block';
             initMap(cps[step]);
@@ -97,6 +108,7 @@
             document.getElementById('dowser-ui').style.display = 'flex';
         }
 
+        // 3本指タップイベント（ダウジング機のみ有効）
         window.addEventListener('touchstart', (e) => {
             if (mode === 'dowser' && e.touches.length === 3) document.body.classList.add('analyze');
         });
@@ -104,34 +116,27 @@
     }
 
     function initMap(target) {
-        // 初期視点を [0,0] にすることで目的地バレを防ぐ
+        // マップ設定：ズーム・移動不可
         map = L.map('map', { 
-            zoomControl: false, 
-            attributionControl: false,
-            dragging: false,
-            touchZoom: false,
-            scrollWheelZoom: false,
-            doubleClickZoom: false,
-            boxZoom: false
+            zoomControl: false, attributionControl: false,
+            dragging: false, touchZoom: false, scrollWheelZoom: false,
+            doubleClickZoom: false, boxZoom: false
         }).setView([0, 0], 18);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // 目的地マーカー（透明度0で隠蔽）
-        targetMarker = L.circle([target.lat, target.lon], { 
-            radius: 15, 
-            color: 'red', 
-            stroke: false,
-            fillOpacity: 0 
-        }).addTo(map);
-
+        // 目的地（初期は透明）
+        targetMarker = L.circle([target.lat, target.lon], { radius: 15, stroke: false, fillOpacity: 0 }).addTo(map);
+        // 現在地
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
+        // 扇形
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
 
     async function performScan() {
         const btn = document.getElementById('scan-btn');
         const overlay = document.getElementById('scanning-overlay');
+        const info = document.getElementById('info-panel');
         
         btn.disabled = true;
         btn.innerText = "SCANNING...";
@@ -144,22 +149,33 @@
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
             
+            // 距離と方位の計算
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
 
+            // 共通：距離数値を更新
             document.getElementById('dist-num').innerText = `${currentDist.toFixed(1)}m`;
-            
-            if (mode === 'navigator') updateNavigator(lat, lon, bearing, target);
-            if (mode === 'dowser') startDowsingEffect(currentDist);
+            info.innerText = `Mission: CP${step+1} | Dist: ${currentDist.toFixed(1)}m`;
 
-            // フィードバック振動
+            // ナビゲーター機の処理
+            if (mode === 'navigator') {
+                updateNavigatorUI(lat, lon, bearing, target);
+            }
+            
+            // ダウジング機の処理
+            if (mode === 'dowser') {
+                startDowsingRipple(currentDist);
+            }
+
+            // 共通フィードバック
             if (navigator.vibrate) navigator.vibrate(100);
             
+            // 到着判定 (15m以内)
             if (currentDist <= 15) {
                 btn.innerText = "ENTER MISSION";
                 btn.style.background = "#ff4500";
                 btn.disabled = false;
-                btn.onclick = () => { location.href = `riddle.html?step=${step}`; };
+                btn.onclick = () => { location.href = `capture.html?step=${step}`; };
             } else {
                 setTimeout(() => {
                     btn.disabled = false;
@@ -168,45 +184,17 @@
                 }, 1200);
             }
         }, (err) => {
-            alert("GPS Error: " + err.message);
+            alert("GPS Error");
             btn.disabled = false;
-            btn.innerText = "SCAN START";
             overlay.style.display = "none";
         }, { enableHighAccuracy: true });
     }
 
-    function startDowsingEffect(dist) {
-        const ui = document.getElementById('dowser-ui');
-        ui.innerHTML = ''; 
-        
-        // 距離が近いほど波紋の間隔を短く（0.4s〜2.5s）
-        let intervalTime = Math.max(0.4, Math.min(2.5, dist / 120));
-
-        function createRipple() {
-            const r = document.createElement('div');
-            r.className = 'ripple';
-            ui.appendChild(r);
-            setTimeout(() => r.remove(), 2000);
-        }
-
-        if (rippleInterval) clearInterval(rippleInterval);
-        createRipple();
-        rippleInterval = setInterval(createRipple, intervalTime * 1000);
-        
-        // 15秒で自動停止
-        setTimeout(() => {
-            if (rippleInterval) {
-                clearInterval(rippleInterval);
-                rippleInterval = null;
-            }
-        }, 15000);
-    }
-
-    function updateNavigator(lat, lon, bearing, target) {
+    function updateNavigatorUI(lat, lon, bearing, target) {
         const pos = [lat, lon];
         userMarker.setLatLng(pos);
         targetMarker.setLatLng([target.lat, target.lon]);
-        map.panTo(pos); // 自分の位置にフォーカス
+        map.panTo(pos); // 自分の現在地に地図を合わせる
         
         const radius = 0.0006; 
         const points = [ pos ];
@@ -221,6 +209,30 @@
             points.push([ptLat, ptLon]);
         }
         sectorPolygon.setLatLngs(points);
+    }
+
+    function startDowsingRipple(dist) {
+        const ui = document.getElementById('dowser-ui');
+        ui.innerHTML = ''; 
+        
+        // 距離が近いほど波紋を速く出す (0.4s 〜 2.5s)
+        let intervalTime = Math.max(0.4, Math.min(2.5, dist / 120));
+
+        const create = () => {
+            const r = document.createElement('div');
+            r.className = 'ripple';
+            ui.appendChild(r);
+            setTimeout(() => r.remove(), 2000);
+        };
+
+        if (rippleInterval) clearInterval(rippleInterval);
+        create();
+        rippleInterval = setInterval(create, intervalTime * 1000);
+        
+        // 15秒間だけ表示
+        setTimeout(() => {
+            if (rippleInterval) { clearInterval(rippleInterval); rippleInterval = null; }
+        }, 15000);
     }
 
     function calculateDistance(lat1, lon1, lat2, lon2) {
