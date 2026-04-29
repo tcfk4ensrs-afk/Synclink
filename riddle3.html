@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetra-Mission 3</title>
+    <style>
+        :root { --main-blue: #00f2ff; }
+        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; text-align: center; }
+        #container { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        
+        /* 蓄光文字の演出 */
+        #secret-msg { 
+            font-size: 3rem; color: #000; text-shadow: none; transition: 0.5s; 
+            letter-spacing: 0.5em;
+        }
+        body.darkness #secret-msg { 
+            color: #afff00; text-shadow: 0 0 20px #afff00; 
+        }
+
+        video { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        #canvas { display: none; }
+        
+        .status { margin-bottom: 20px; color: var(--main-blue); }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <h2>FINAL MISSION</h2>
+        <div class="status" id="light-level">光を遮断せよ...</div>
+        
+        <div id="secret-msg">TRIANGLE</div>
+        
+        <p style="margin-top: 40px; font-size: 0.8rem;">背面カメラを手で完全に塞いでください</p>
+        <button id="finish-btn" style="display:none; margin-top:20px; padding:15px; border:2px solid #afff00; background:none; color:#afff00;" onclick="complete()">ミッション完了</button>
+    </div>
+
+    <video id="v" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+<script>
+    async function startLightSensor() {
+        const video = document.getElementById('v');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            video.srcObject = stream;
+
+            setInterval(() => {
+                canvas.width = 10; // 低解像度で十分
+                canvas.height = 10;
+                ctx.drawImage(video, 0, 0, 10, 10);
+                const data = ctx.getImageData(0, 0, 10, 10).data;
+                
+                // 平均輝度を計算
+                let brightness = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    brightness += (data[i] + data[i+1] + data[i+2]) / 3;
+                }
+                brightness /= (data.length / 4);
+
+                if (brightness < 30) { // 一定以下で「闇」と判定
+                    document.body.classList.add('darkness');
+                    document.getElementById('light-level').innerText = "闇を確認。封印が解けました。";
+                    document.getElementById('finish-btn').style.display = 'block';
+                } else {
+                    document.body.classList.remove('darkness');
+                }
+            }, 500);
+
+        } catch (e) { alert("カメラ権限が必要です"); }
+    }
+
+    function complete() {
+        alert("全てのチェックポイントを制覇しました。原点（Hub）に戻り、最後の儀式を行ってください。");
+        localStorage.setItem('tetra_current_step', 3);
+        location.href = 'hub.html';
+    }
+
+    startLightSensor();
+</script>
+</body>
+</html>
