@@ -4,31 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>FINAL SYNC | NAVIGATOR</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --main-blue: #00f2ff; }
-        body { margin: 0; background: #000; color: white; font-family: monospace; text-align: center; overflow: hidden; height: 100vh; display: flex; flex-direction: column; justify-content: center; }
-        #timer { font-size: 3rem; color: #ff4500; margin-bottom: 20px; }
-        .code-box { border: 2px solid var(--main-blue); padding: 20px; margin: 10px; }
-        .display-label { font-size: 0.8rem; color: #888; }
-        .target-code { font-size: 2.5rem; color: gold; font-weight: bold; }
-        input { background: #111; border: 2px solid var(--main-blue); color: white; font-size: 2rem; width: 80%; text-align: center; margin-top: 20px; text-transform: uppercase; }
-        #progress { margin-top: 10px; font-size: 1.2rem; }
+        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; }
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.6; pointer-events: none; }
+        #ui-layer { position: relative; z-index: 10; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.3); pointer-events: none; }
+        #timer { font-size: 3rem; color: #ff4500; text-shadow: 0 0 10px #000; }
+        .ritual-overlay { background: rgba(0,0,0,0.8); border: 2px solid var(--main-blue); padding: 20px; width: 85%; box-sizing: border-box; display: none; pointer-events: auto; }
+        .target-code { font-size: 2.5rem; color: gold; font-weight: bold; margin: 10px 0; }
+        input { background: #111; border: 2px solid var(--main-blue); color: white; font-size: 2rem; width: 90%; text-align: center; margin-top: 15px; text-transform: uppercase; }
+        #guide-msg { font-size: 1.2rem; color: var(--main-blue); animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     </style>
 </head>
 <body>
 
-    <div id="timer">60</div>
-    <div id="progress">PHASE: 1 / 5</div>
+    <div id="map"></div>
+    <div id="ui-layer">
+        <div id="timer">60</div>
+        <div id="progress" style="margin-bottom: 20px;">ALTITUDE: 100m</div>
+        
+        <div id="guide-msg">SWIPE UP TO SYNC</div>
 
-    <div class="code-box">
-        <div class="display-label">相手に伝えろ（DOWSER CODE）</div>
-        <div class="target-code" id="send-code">9999</div>
+        <div id="input-area" class="ritual-overlay">
+            <div style="font-size: 0.8rem; color: #888;">相方に伝えろ（DOWSER CODE）</div>
+            <div class="target-code" id="send-code">----</div>
+            <hr border="1" color="#333">
+            <div style="font-size: 0.8rem; color: #888;">相方から聞け（NAV CODE）</div>
+            <input type="text" id="input-code" placeholder="ENTER" autocomplete="off">
+            <p style="font-size: 0.7rem; margin-top: 10px;">入力後、再度上スワイプで認証</p>
+        </div>
     </div>
 
-    <div class="display-label">相手から聞け（NAV CODE）</div>
-    <input type="text" id="input-code" placeholder="ENTER" autocomplete="off">
-    <p style="font-size:0.7rem; margin-top:10px;">入力後、画面を上にスワイプ</p>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     const codes = [
         {nav: "ALPHA", dow: "9999"}, {nav: "ZETA", dow: "1234"},
@@ -36,44 +45,63 @@
     ];
     let step = 0;
     let timeLeft = 60;
+    let isWaitingInput = false;
+    let map;
 
-    // カウントダウン
+    // マップ初期化
+    const origin = JSON.parse(localStorage.getItem('tetra_origin'));
+    map = L.map('map', { zoomControl: false, attributionControl: false }).setView([origin.lat, origin.lon], 18);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
     const timer = setInterval(() => {
         timeLeft--;
         document.getElementById('timer').innerText = timeLeft;
-        if (timeLeft <= 0) {
-            clearInterval(timer);
-            alert("同期失敗：タイムオーバー");
-            location.href = "hub.html";
-        }
+        if (timeLeft <= 0) { clearInterval(timer); location.href = "hub.html"; }
     }, 1000);
 
-    function updateUI() {
-        document.getElementById('send-code').innerText = codes[step].dow;
-        document.getElementById('progress').innerText = `PHASE: ${step + 1} / 5`;
-        document.getElementById('input-code').value = "";
-    }
-
-    // スワイプで認証
     let startY = 0;
     window.addEventListener('touchstart', e => startY = e.touches[0].clientY);
     window.addEventListener('touchend', e => {
-        if (startY - e.changedTouches[0].clientY > 100) {
-            if (document.getElementById('input-code').value.toUpperCase() === codes[step].nav) {
-                step++;
-                if (step >= 5) {
-                    clearInterval(timer);
-                    alert("【SYSTEM SYNCHRONIZED】\nCP4 保存完了。");
-                    localStorage.setItem('tetra_current_step', 4);
-                    location.href = "hub.html";
-                } else {
-                    updateUI();
-                }
-            } else {
-                alert("認証エラー");
-            }
-        }
+        const diff = startY - e.changedTouches[0].clientY;
+        if (diff > 80) handleSwipe();
     });
+
+    function handleSwipe() {
+        if (!isWaitingInput) {
+            // 第1段階：スワイプして入力欄を出す
+            document.getElementById('guide-msg').style.display = "none";
+            document.getElementById('input-area').style.display = "block";
+            document.getElementById('send-code').innerText = codes[step].dow;
+            isWaitingInput = true;
+        } else {
+            // 第2段階：入力後の認証スワイプ
+            verifyCode();
+        }
+    }
+
+    function verifyCode() {
+        const val = document.getElementById('input-code').value.toUpperCase();
+        if (val === codes[step].nav) {
+            step++;
+            // マップの倍率を下げる
+            map.setZoom(18 - step); 
+            document.getElementById('progress').innerText = `ALTITUDE: ${100 + step*500}m`;
+            
+            if (step >= 5) {
+                alert("全同期完了。CP4を保存しました。");
+                localStorage.setItem('tetra_current_step', 4);
+                location.href = "hub.html";
+            } else {
+                // 次のフェーズへリセット
+                isWaitingInput = false;
+                document.getElementById('input-area').style.display = "none";
+                document.getElementById('guide-msg').style.display = "block";
+                document.getElementById('input-code').value = "";
+            }
+        } else {
+            alert("認証エラー");
+        }
+    }
 </script>
 </body>
 </html>
