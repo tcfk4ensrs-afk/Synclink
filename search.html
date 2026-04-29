@@ -8,62 +8,22 @@
     <style>
         :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; --overlay-bg: rgba(0, 242, 255, 0.15); }
         body { margin: 0; font-family: 'Courier New', monospace; background: #000; color: white; overflow: hidden; height: 100vh; }
-        
-        /* 役割選択画面 */
         #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; z-index: 1000; position: relative; background: #000; }
         .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; font-weight: bold; }
-
-        /* メインゲーム画面 */
         #game-screen { display: none; width: 100vw; height: 100vh; position: relative; }
-        
-        /* 1台目：ナビ機用（地図） */
         #map { width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; }
-
-        /* 2台目：ダウジング機用（波紋） */
         #dowser-ui { width: 100%; height: 100%; display: none; align-items: center; justify-content: center; position: relative; }
-        .ripple { 
-            width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; 
-            position: absolute; animation: pulse 2s infinite; opacity: 0; 
-        }
+        .ripple { width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; position: absolute; animation: pulse 2s infinite; opacity: 0; }
         @keyframes pulse { 0% { width: 50px; height: 50px; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
-
-        /* スキャンボタン */
-        #scan-btn { 
-            position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%);
-            width: 75%; padding: 22px; font-size: 1.4rem; background: rgba(0, 0, 0, 0.9);
-            color: var(--main-blue); border: 3px solid var(--main-blue); border-radius: 50px;
-            z-index: 500; font-weight: bold; cursor: pointer; box-shadow: 0 0 20px var(--main-blue);
-            transition: all 0.2s;
-        }
+        #scan-btn { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); width: 75%; padding: 22px; font-size: 1.4rem; background: rgba(0, 0, 0, 0.9); color: var(--main-blue); border: 3px solid var(--main-blue); border-radius: 50px; z-index: 500; font-weight: bold; cursor: pointer; box-shadow: 0 0 20px var(--main-blue); transition: all 0.2s; }
         #scan-btn:active { background: var(--main-blue); color: #000; }
         #scan-btn:disabled { border-color: #444; color: #444; box-shadow: none; }
-
-        /* スキャン中・ジャンプ中演出 */
-        #scanning-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--overlay-bg); display: none; z-index: 400;
-            border: 4px solid var(--main-blue); box-sizing: border-box;
-            pointer-events: none;
-        }
-
-        /* 2台目用：3本指解析モード */
-        #distance-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--analyze-orange); display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-            z-index: 600;
-        }
+        #scanning-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--overlay-bg); display: none; z-index: 400; border: 4px solid var(--main-blue); box-sizing: border-box; pointer-events: none; }
+        #distance-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--analyze-orange); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 600; }
         body.analyze #distance-overlay { display: flex; }
         #analyze-text { font-size: 2rem; font-weight: bold; letter-spacing: 0.2em; }
-        
         #info-panel { position: absolute; top: 10px; left: 10px; z-index: 100; font-size: 0.8rem; background: rgba(0,0,0,0.5); padding: 5px; white-space: pre-wrap; }
-
-        /* Hubへの戻るボタン */
-        #hub-btn {
-            position: absolute; top: 10px; right: 10px; z-index: 100;
-            padding: 8px 15px; background: rgba(0,0,0,0.7); border: 1px solid var(--main-blue);
-            color: var(--main-blue); border-radius: 5px; font-size: 0.8rem; text-decoration: none;
-        }
+        #hub-btn { position: absolute; top: 10px; right: 10px; z-index: 100; padding: 8px 15px; background: rgba(0,0,0,0.7); border: 1px solid var(--main-blue); color: var(--main-blue); border-radius: 5px; font-size: 0.8rem; text-decoration: none; }
     </style>
 </head>
 <body>
@@ -81,22 +41,14 @@
     <div id="map"></div>
     <div id="dowser-ui"></div>
     <button id="scan-btn" onclick="performScan()">SCAN START</button>
-    
-    <div id="distance-overlay">
-        <div id="analyze-text">ANALYZING...</div>
-    </div>
+    <div id="distance-overlay"><div id="analyze-text">ANALYZING...</div></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     let mode = '';
     let map, userMarker, sectorPolygon, targetMarker;
-    let currentDist = 0;
-    let rippleInterval = null;
-
-    // ジャンプ機能用変数
-    let isJumping = false;
-    let touchStartY = 0;
+    let currentDist = 0, rippleInterval = null, isJumping = false, touchStartY = 0;
 
     function getGameData() {
         const cps = JSON.parse(localStorage.getItem('tetra_cps'));
@@ -108,10 +60,8 @@
         mode = selectedMode;
         document.getElementById('setup').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
-
         const { cps, step } = getGameData();
-        if (!cps) { alert("データがありません。index.htmlから始めてください。"); return; }
-
+        if (!cps) { alert("データがありません。"); return; }
         if (mode === 'navigator') {
             document.getElementById('map').style.display = 'block';
             initMap(cps[step]);
@@ -119,169 +69,98 @@
         } else {
             document.getElementById('dowser-ui').style.display = 'flex';
         }
-
-        window.addEventListener('touchstart', (e) => {
-            if (mode === 'dowser' && e.touches.length === 3) document.body.classList.add('analyze');
-        });
+        window.addEventListener('touchstart', (e) => { if (mode === 'dowser' && e.touches.length === 3) document.body.classList.add('analyze'); });
         window.addEventListener('touchend', () => document.body.classList.remove('analyze'));
     }
 
     function initMap(target) {
-        map = L.map('map', { 
-            zoomControl: false, attributionControl: false,
-            dragging: false, touchZoom: false, scrollWheelZoom: false,
-            doubleClickZoom: false, boxZoom: false
-        }).setView([0, 0], 18);
-
-        // 視認性の高い標準タイルに戻す
+        map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false }).setView([0, 0], 18);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
         targetMarker = L.circle([target.lat, target.lon], { radius: 15, stroke: false, fillOpacity: 0 }).addTo(map);
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
 
-    // 上スワイプでジャンプ能力発動
     function setupJumpGesture() {
         window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; });
         window.addEventListener('touchend', (e) => {
             const touchEndY = e.changedTouches[0].clientY;
-            // 上スワイプ（120px以上）でジャンプ
-            if (mode === 'navigator' && !isJumping && touchStartY - touchEndY > 120) {
-                executeJump();
-            }
+            if (mode === 'navigator' && !isJumping && touchStartY - touchEndY > 120) executeJump();
         });
     }
 
     function executeJump() {
         isJumping = true;
-        const btn = document.getElementById('scan-btn');
-        const overlay = document.getElementById('scanning-overlay');
-        
-        btn.disabled = true;
-        overlay.style.display = "block";
-        overlay.style.border = "10px solid gold"; // ジャンプ中の特別演出
-
-        // 地図を広域表示に
-        map.setZoom(14);
-        map.dragging.enable(); // ジャンプ中のみ周辺をドラッグで見れる
-
+        const btn = document.getElementById('scan-btn'), overlay = document.getElementById('scanning-overlay');
+        btn.disabled = true; overlay.style.display = "block"; overlay.style.border = "10px solid gold";
+        map.setZoom(14); map.dragging.enable();
         let timeLeft = 30;
         const timer = setInterval(() => {
             btn.innerText = `JUMPING... ${timeLeft}s`;
             timeLeft--;
             if (timeLeft < 0) {
                 clearInterval(timer);
-                // 着地処理
-                map.setZoom(18);
-                map.panTo(userMarker.getLatLng());
-                map.dragging.disable();
-                overlay.style.display = "none";
-                overlay.style.border = "4px solid var(--main-blue)";
-                btn.disabled = false;
-                btn.innerText = "SCAN START";
-                isJumping = false;
+                map.setZoom(18); map.panTo(userMarker.getLatLng()); map.dragging.disable();
+                overlay.style.display = "none"; overlay.style.border = "4px solid var(--main-blue)";
+                btn.disabled = false; btn.innerText = "SCAN START"; isJumping = false;
             }
         }, 1000);
     }
 
     async function performScan() {
         if (isJumping) return;
-        const btn = document.getElementById('scan-btn');
-        const overlay = document.getElementById('scanning-overlay');
-        const info = document.getElementById('info-panel');
-        
-        btn.disabled = true;
-        btn.innerText = "SCANNING...";
-        overlay.style.display = "block";
-
+        const btn = document.getElementById('scan-btn'), overlay = document.getElementById('scanning-overlay'), info = document.getElementById('info-panel');
+        btn.disabled = true; btn.innerText = "SCANNING..."; overlay.style.display = "block";
         const { cps, step } = getGameData();
         const target = cps[step];
 
         navigator.geolocation.getCurrentPosition((pos) => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            
+            const lat = pos.coords.latitude, lon = pos.coords.longitude;
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
-
-            // 左上パネルの更新（距離表示は非表示のまま）
             info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
 
-            if (mode === 'navigator') {
-                updateNavigatorUI(lat, lon, bearing, target);
-            }
-            
-            if (mode === 'dowser') {
-                startDowsingRipple(currentDist);
-            }
-
+            if (mode === 'navigator') updateNavigatorUI(lat, lon, bearing, target);
+            if (mode === 'dowser') startDowsingRipple(currentDist);
             if (navigator.vibrate) navigator.vibrate(100);
             
             if (currentDist <= 15) {
-                btn.innerText = "ENTER MISSION";
-                btn.style.background = "#ff4500";
-                btn.disabled = false;
-                btn.onclick = () => { location.href = `capture.html?step=${step}`; };
+                btn.innerText = "ENTER MISSION"; btn.style.background = "#ff4500"; btn.disabled = false;
+                btn.onclick = () => { 
+                    let targetPage = "riddle.html"; 
+                    if (step === 1) targetPage = "riddle2.html";
+                    if (step === 2) targetPage = "riddle3.html";
+                    location.href = `capture.html?step=${step}&next=${targetPage}`; 
+                };
             } else {
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.innerText = "SCAN START";
-                    overlay.style.display = "none";
-                }, 1200);
+                setTimeout(() => { btn.disabled = false; btn.innerText = "SCAN START"; overlay.style.display = "none"; }, 1200);
             }
-        }, (err) => {
-            alert("GPS Error");
-            btn.disabled = false;
-            overlay.style.display = "none";
-        }, { enableHighAccuracy: true });
+        }, (err) => { alert("GPS Error"); btn.disabled = false; overlay.style.display = "none"; }, { enableHighAccuracy: true });
     }
 
     function updateNavigatorUI(lat, lon, bearing, target) {
         const pos = [lat, lon];
-        userMarker.setLatLng(pos);
-        targetMarker.setLatLng([target.lat, target.lon]);
-        
-        // ジャンプ中以外は常に自分の位置に地図を追従
+        userMarker.setLatLng(pos); targetMarker.setLatLng([target.lat, target.lon]);
         if (!isJumping) map.panTo(pos);
-        
-        const radius = 0.0006; 
-        const points = [ pos ];
-        const startAngle = (bearing - 25);
-        const endAngle = (bearing + 25);
-
+        const radius = 0.0006, points = [pos], startAngle = bearing - 25, endAngle = bearing + 25;
         for (let i = 0; i <= 10; i++) {
-            const angleDeg = startAngle + (endAngle - startAngle) * (i / 10);
-            const angleRad = (90 - angleDeg) * Math.PI / 180; 
-            const ptLat = lat + radius * Math.sin(angleRad);
-            const ptLon = lon + radius * Math.cos(angleRad);
-            points.push([ptLat, ptLon]);
+            const angleRad = (90 - (startAngle + (endAngle - startAngle) * (i / 10))) * Math.PI / 180; 
+            points.push([lat + radius * Math.sin(angleRad), lon + radius * Math.cos(angleRad)]);
         }
         sectorPolygon.setLatLngs(points);
     }
 
     function startDowsingRipple(dist) {
-        const ui = document.getElementById('dowser-ui');
-        ui.innerHTML = ''; 
+        const ui = document.getElementById('dowser-ui'); ui.innerHTML = ''; 
         let intervalTime = Math.max(0.4, Math.min(2.5, dist / 120));
-        const create = () => {
-            const r = document.createElement('div');
-            r.className = 'ripple';
-            ui.appendChild(r);
-            setTimeout(() => r.remove(), 2000);
-        };
+        const create = () => { const r = document.createElement('div'); r.className = 'ripple'; ui.appendChild(r); setTimeout(() => r.remove(), 2000); };
         if (rippleInterval) clearInterval(rippleInterval);
-        create();
-        rippleInterval = setInterval(create, intervalTime * 1000);
-        setTimeout(() => {
-            if (rippleInterval) { clearInterval(rippleInterval); rippleInterval = null; }
-        }, 15000);
+        create(); rippleInterval = setInterval(create, intervalTime * 1000);
+        setTimeout(() => { if (rippleInterval) { clearInterval(rippleInterval); rippleInterval = null; } }, 15000);
     }
 
     function calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371000;
-        const dLat = (lat2-lat1)*Math.PI/180;
-        const dLon = (lon2-lon1)*Math.PI/180;
+        const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
         const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
