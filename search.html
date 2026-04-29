@@ -38,11 +38,12 @@
         #scan-btn:active { background: var(--main-blue); color: #000; }
         #scan-btn:disabled { border-color: #444; color: #444; box-shadow: none; }
 
-        /* スキャン中演出 */
+        /* スキャン中・ジャンプ中演出 */
         #scanning-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--overlay-bg); display: none; z-index: 400;
             border: 4px solid var(--main-blue); box-sizing: border-box;
+            pointer-events: none;
         }
 
         /* 2台目用：3本指解析モード */
@@ -132,8 +133,8 @@
             doubleClickZoom: false, boxZoom: false
         }).setView([0, 0], 18);
 
-        // ダークな地図タイルを使用
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        // 視認性の高い標準タイルに戻す
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         targetMarker = L.circle([target.lat, target.lon], { radius: 15, stroke: false, fillOpacity: 0 }).addTo(map);
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
@@ -145,7 +146,8 @@
         window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; });
         window.addEventListener('touchend', (e) => {
             const touchEndY = e.changedTouches[0].clientY;
-            if (!isJumping && touchStartY - touchEndY > 120) {
+            // 上スワイプ（120px以上）でジャンプ
+            if (mode === 'navigator' && !isJumping && touchStartY - touchEndY > 120) {
                 executeJump();
             }
         });
@@ -203,6 +205,7 @@
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
 
+            // 左上パネルの更新（距離表示は非表示のまま）
             info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
 
             if (mode === 'navigator') {
@@ -238,6 +241,8 @@
         const pos = [lat, lon];
         userMarker.setLatLng(pos);
         targetMarker.setLatLng([target.lat, target.lon]);
+        
+        // ジャンプ中以外は常に自分の位置に地図を追従
         if (!isJumping) map.panTo(pos);
         
         const radius = 0.0006; 
