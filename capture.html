@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetra-Capture</title>
+    <style>
+        :root { --main-blue: #00f2ff; }
+        body { margin: 0; background: #000; font-family: monospace; overflow: hidden; color: white; text-align: center; height: 100vh; }
+        #capture-ui { height: 100%; display: flex; flex-direction: column; position: relative; }
+        
+        #preview { width: 100%; height: 100%; object-fit: cover; }
+        #canvas { display: none; }
+
+        /* ガイド枠（三角錐） */
+        #frame-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border: 4px solid var(--main-blue); box-sizing: border-box;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        #frame-overlay::before {
+            content: ''; width: 0; height: 0;
+            border-left: 100px solid transparent; border-right: 100px solid transparent;
+            border-bottom: 150px solid rgba(0, 242, 255, 0.3); /* 三角錐ガイド */
+        }
+
+        /* 撮影ボタン */
+        #take-btn {
+            position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%);
+            width: 80px; height: 80px; background: white; border: 10px solid #555;
+            border-radius: 50%; cursor: pointer; z-index: 100;
+        }
+        #take-btn:active { background: #ccc; }
+        
+        #title { position: absolute; top: 10%; width: 100%; z-index: 10; color: var(--main-blue); font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+<div id="capture-ui">
+    <p id="title">CP RECORDING...</p>
+    <video id="preview" autoplay playsinline></video>
+    <div id="frame-overlay"></div>
+    <canvas id="canvas"></canvas>
+    <button id="take-btn" onclick="captureCPPhoto()"></button>
+</div>
+
+<script>
+    const params = new URLSearchParams(location.search);
+    const step = parseInt(params.get('step') || "0");
+    document.getElementById('title').innerText = `CP ${step + 1} の記録を撮影せよ`;
+
+    // カメラ起動
+    async function startCamera() {
+        const video = document.getElementById('preview');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+            video.srcObject = stream;
+        } catch (err) { alert("カメラの起動に失敗しました。"); }
+    }
+
+    function captureCPPhoto() {
+        const video = document.getElementById('preview');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+
+        // 画像をBase64形式で保存 (tetra_photo_1 〜 tetra_photo_3)
+        const imgData = canvas.toDataURL('image/jpeg');
+        localStorage.setItem(`tetra_photo_${step + 1}`, imgData);
+
+        if (navigator.vibrate) navigator.vibrate(200); // 撮影フィードバック
+        
+        alert("記録を保存しました。謎を解け。");
+        // 写真を撮ったらriddle.htmlへ
+        location.href = `riddle.html?step=${step}`;
+    }
+
+    startCamera();
+</script>
+</body>
+</html>
