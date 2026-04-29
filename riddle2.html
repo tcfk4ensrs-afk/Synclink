@@ -12,7 +12,7 @@
         /* ジャンプ（俯瞰）演出 */
         body.jumping #mission-container { transform: scale(0.1); filter: blur(2px); }
         
-        .hint-box { border: 2px solid var(--main-blue); padding: 20px; margin: 20px; position: relative; }
+        .hint-box { border: 2px solid var(--main-blue); padding: 20px; margin: 20px; position: relative; width: 80%; max-width: 300px; }
         .huge-symbol { font-size: 10rem; color: #111; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: -1; }
         body.jumping .huge-symbol { color: var(--main-blue); }
 
@@ -26,11 +26,12 @@
         <p>「視点」を高く上げよ。<br>地上に描かれた巨大な印を読み解け。</p>
         <div class="hint-box">
             <p>この枠の中に印がある...</p>
-            <div class="huge-symbol">Ω</div> </div>
+            <div class="huge-symbol">Ω</div> 
+        </div>
         <p style="font-size: 0.8rem; color: #555;">(画面を長押ししてジャンプ)</p>
     </div>
 
-    <button id="clear-btn" onclick="finish()">合言葉：オメガ</button>
+    <button id="clear-btn" onclick="finish()">合言葉を確認した</button>
 
 <script>
     let timer;
@@ -39,6 +40,7 @@
         timer = setTimeout(() => {
             document.body.classList.add('jumping');
             document.getElementById('clear-btn').style.display = 'block';
+            if (navigator.vibrate) navigator.vibrate(100);
         }, 1000);
     });
 
@@ -48,8 +50,13 @@
     });
 
     function finish() {
-        alert("CP2 完了。システムの高度制限が解除されました。");
+        // 能力解放のポップアップ通知
+        alert("【MISSION 02 COMPLETE】\n\n【SYSTEM UPGRADE】\n能力：ANALYZE が解放されました！\n\n[操作方法]\ndowserモード中、画面を『3本指で同時タップ』している間、ターゲットとの正確な距離を解析できます。");
+
+        // 進捗を2（CP3探索中）に更新
         localStorage.setItem('tetra_current_step', 2);
+        
+        // Hub画面へ戻る
         location.href = 'hub.html';
     }
 </script>
