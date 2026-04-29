@@ -74,6 +74,13 @@
         // 探索画面に戻る
         location.href = 'search.html';
     }
+    function finish() {
+    // 演出用ポップアップ
+    alert("【SYSTEM UPGRADE】\n能力：JUMP が解放されました！\n\n[操作方法]\nsearch画面で『上スワイプ』をすると、30秒間だけ高度を上げ、広域マップを確認できます。");
+    
+    localStorage.setItem('tetra_current_step', 1);
+    location.href = 'hub.html';
+}
 </script>
 </body>
 </html>
