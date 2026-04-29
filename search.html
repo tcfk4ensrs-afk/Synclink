@@ -56,6 +56,13 @@
         #analyze-text { font-size: 2rem; font-weight: bold; letter-spacing: 0.2em; }
         
         #info-panel { position: absolute; top: 10px; left: 10px; z-index: 100; font-size: 0.8rem; background: rgba(0,0,0,0.5); padding: 5px; white-space: pre-wrap; }
+
+        /* Hubへの戻るボタン */
+        #hub-btn {
+            position: absolute; top: 10px; right: 10px; z-index: 100;
+            padding: 8px 15px; background: rgba(0,0,0,0.7); border: 1px solid var(--main-blue);
+            color: var(--main-blue); border-radius: 5px; font-size: 0.8rem; text-decoration: none;
+        }
     </style>
 </head>
 <body>
@@ -68,6 +75,7 @@
 
 <div id="game-screen">
     <div id="info-panel">Waiting for scan...</div>
+    <a href="hub.html" id="hub-btn">WARP TO HUB</a>
     <div id="scanning-overlay"></div>
     <div id="map"></div>
     <div id="dowser-ui"></div>
@@ -84,6 +92,10 @@
     let map, userMarker, sectorPolygon, targetMarker;
     let currentDist = 0;
     let rippleInterval = null;
+
+    // ジャンプ機能用変数
+    let isJumping = false;
+    let touchStartY = 0;
 
     function getGameData() {
         const cps = JSON.parse(localStorage.getItem('tetra_cps'));
@@ -102,6 +114,7 @@
         if (mode === 'navigator') {
             document.getElementById('map').style.display = 'block';
             initMap(cps[step]);
+            setupJumpGesture();
         } else {
             document.getElementById('dowser-ui').style.display = 'flex';
         }
@@ -119,14 +132,59 @@
             doubleClickZoom: false, boxZoom: false
         }).setView([0, 0], 18);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        // ダークな地図タイルを使用
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
         targetMarker = L.circle([target.lat, target.lon], { radius: 15, stroke: false, fillOpacity: 0 }).addTo(map);
         userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
 
+    // 上スワイプでジャンプ能力発動
+    function setupJumpGesture() {
+        window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; });
+        window.addEventListener('touchend', (e) => {
+            const touchEndY = e.changedTouches[0].clientY;
+            if (!isJumping && touchStartY - touchEndY > 120) {
+                executeJump();
+            }
+        });
+    }
+
+    function executeJump() {
+        isJumping = true;
+        const btn = document.getElementById('scan-btn');
+        const overlay = document.getElementById('scanning-overlay');
+        
+        btn.disabled = true;
+        overlay.style.display = "block";
+        overlay.style.border = "10px solid gold"; // ジャンプ中の特別演出
+
+        // 地図を広域表示に
+        map.setZoom(14);
+        map.dragging.enable(); // ジャンプ中のみ周辺をドラッグで見れる
+
+        let timeLeft = 30;
+        const timer = setInterval(() => {
+            btn.innerText = `JUMPING... ${timeLeft}s`;
+            timeLeft--;
+            if (timeLeft < 0) {
+                clearInterval(timer);
+                // 着地処理
+                map.setZoom(18);
+                map.panTo(userMarker.getLatLng());
+                map.dragging.disable();
+                overlay.style.display = "none";
+                overlay.style.border = "4px solid var(--main-blue)";
+                btn.disabled = false;
+                btn.innerText = "SCAN START";
+                isJumping = false;
+            }
+        }, 1000);
+    }
+
     async function performScan() {
+        if (isJumping) return;
         const btn = document.getElementById('scan-btn');
         const overlay = document.getElementById('scanning-overlay');
         const info = document.getElementById('info-panel');
@@ -145,7 +203,6 @@
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
 
-            // 左上パネルの更新（距離表示を削除）
             info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
 
             if (mode === 'navigator') {
@@ -181,7 +238,7 @@
         const pos = [lat, lon];
         userMarker.setLatLng(pos);
         targetMarker.setLatLng([target.lat, target.lon]);
-        map.panTo(pos);
+        if (!isJumping) map.panTo(pos);
         
         const radius = 0.0006; 
         const points = [ pos ];
