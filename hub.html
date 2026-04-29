@@ -19,7 +19,7 @@
 <div id="map"></div>
 <div id="ui-panel">
     <div class="info-text" id="progress-info">SYSTEM READY</div>
-    <a href="search.html" class="btn-search">探索を開始する</a>
+    <a href="search.html" class="btn-search" id="action-btn">探索を開始する</a>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -35,12 +35,12 @@
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // 原点
+    // 原点マーカー
     L.circleMarker([origin.lat, origin.lon], {
         radius: 10, color: 'blue', fillColor: '#00f2ff', fillOpacity: 0.9
     }).addTo(map).bindPopup("<b>START / ORIGIN</b>");
 
-    // 到達済みのCPだけを表示（ワープ用）
+    // 到達済みのCPだけを表示
     for (let i = 0; i < currentStep; i++) {
         const cp = cps[i];
         const marker = L.circle([cp.lat, cp.lon], {
@@ -48,20 +48,51 @@
         }).addTo(map);
 
         const photo = localStorage.getItem(`tetra_photo_${i+1}`);
-        marker.bindPopup(`
+        
+        // ワープ機能のロック判定
+        let popupContent = `
             <div style="text-align:center; color:#000;">
                 <b>CHECKPOINT ${i+1}</b><br>
-                <img src="${photo}" style="width:120px; margin:5px 0;"><br>
-                <button onclick="warp(${i})" style="width:100%; padding:5px; cursor:pointer;">WARP</button>
-            </div>
-        `);
+                <img src="${photo}" style="width:120px; margin:5px 0;"><br>`;
+        
+        if (currentStep >= 3) {
+            // CP3クリア済みならワープボタンを表示
+            popupContent += `<button onclick="warp(${i})" style="width:100%; padding:5px; cursor:pointer; background:var(--main-blue); border:none; font-weight:bold;">WARP</button>`;
+        } else {
+            // 未クリアならロック中メッセージを表示
+            popupContent += `<div style="font-size:0.7rem; color:red; font-weight:bold;">WARP LOCK: CP3制覇で解放</div>`;
+        }
+        
+        popupContent += `</div>`;
+        marker.bindPopup(popupContent);
     }
 
-    document.getElementById('progress-info').innerText = `到達状況: ${currentStep} / 3 地点`;
+    // UIパネルの更新
+    const infoPanel = document.getElementById('progress-info');
+    const actionBtn = document.getElementById('action-btn');
 
-    function warp(step) {
-        if(confirm(`CP${step+1} へワープしますか？`)) {
-            location.href = `riddle.html?step=${step}`;
+    if (currentStep >= 3) {
+        infoPanel.innerText = `到達状況: ${currentStep} / 3 (ALL CLEAR)`;
+        infoPanel.style.color = "gold";
+        actionBtn.innerText = "最終確認を終了";
+    } else {
+        infoPanel.innerText = `到達状況: ${currentStep} / 3 地点`;
+    }
+
+    function warp(stepIndex) {
+        // 安全策として関数内でも再判定
+        if (currentStep < 3) {
+            alert("能力「WARP」はまだロックされています。");
+            return;
+        }
+
+        if(confirm(`CP${stepIndex+1} へワープ（再挑戦）しますか？`)) {
+            // ステップに合わせて飛ばすファイルを決定
+            let targetPage = "riddle.html";
+            if (stepIndex === 1) targetPage = "riddle2.html";
+            if (stepIndex === 2) targetPage = "riddle3.html";
+            
+            location.href = `${targetPage}?step=${stepIndex}`;
         }
     }
 </script>
