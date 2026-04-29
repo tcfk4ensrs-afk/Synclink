@@ -3,132 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tetra-Sync Minimal</title>
+    <title>Tetra-Sync Search</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --main-blue: #00f2ff; --analyze-orange: #ff4500; }
-        body { margin: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: white; overflow: hidden; transition: background 0.3s; }
+        body { margin: 0; font-family: monospace; background: #000; color: white; overflow: hidden; }
         
-        /* 役割選択画面 */
-        #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; }
+        #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; z-index: 1000; position: relative; background: #000; }
         .mode-btn { width: 80%; padding: 20px; font-size: 1.2rem; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); border-radius: 10px; }
 
-        /* メイン画面 */
-        #game-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; position: relative; }
-        
-        /* 1台目：扇形ポインター */
-        #pointer-container { transition: transform 0.1s; display: none; }
-        #cone { width: 0; height: 0; border-left: 40px solid transparent; border-right: 40px solid transparent; border-bottom: 120px solid var(--main-blue); filter: drop-shadow(0 0 15px var(--main-blue)); }
+        #game-screen { display: none; width: 100vw; height: 100vh; position: relative; }
+        #map { width: 100%; height: 100%; z-index: 1; }
 
-        /* 2台目：ダウジング波紋 */
-        #ripple-container { display: none; }
-        .ripple { width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { width: 50px; height: 50px; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
+        /* スキャンボタン */
+        #scan-btn { 
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            padding: 15px 40px; font-size: 1.2rem; background: rgba(0, 0, 0, 0.8);
+            color: var(--main-blue); border: 2px solid var(--main-blue); border-radius: 30px;
+            z-index: 100; font-weight: bold; cursor: pointer;
+        }
+        #scan-btn:active { background: var(--main-blue); color: #000; }
 
-        /* 解析モード（3本指タップ） */
-        body.analyze { background: var(--analyze-orange); }
-        #distance-val { font-size: 4rem; display: none; z-index: 10; }
-        body.analyze #distance-val { display: block; }
-        body.analyze #visual-elements { display: none; }
+        /* 解析モード（2台目用） */
+        #distance-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--analyze-orange); display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 200;
+        }
+        body.analyze #distance-overlay { display: flex; }
+        #dist-num { font-size: 5rem; font-weight: bold; }
 
-        #debug-info { position: absolute; bottom: 10px; font-size: 0.7rem; color: #444; width: 100%; text-align: center; }
+        /* デバッグ・ステータス */
+        #info-panel {
+            position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6);
+            padding: 5px 10px; font-size: 0.8rem; z-index: 100; pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
 <div id="setup">
     <h1 style="color: var(--main-blue);">TETRA-SYNC</h1>
-    <button class="mode-btn" onclick="startApp('navigator')">1台目：ナビゲーター</button>
-    <button class="mode-btn" onclick="startApp('dowser')">2台目：ダウジング</button>
-    <p style="font-size: 0.8rem; opacity: 0.6;">※屋外で2台並べて開始してください</p>
+    <button class="mode-btn" onclick="init('navigator')">1台目：ナビゲーター</button>
+    <button class="mode-btn" onclick="init('dowser')">2台目：ダウジング</button>
 </div>
 
 <div id="game-screen">
-    <div id="visual-elements">
-        <div id="pointer-container"><div id="cone"></div></div>
-        <div id="ripple-container"><div class="ripple"></div><div class="ripple" style="animation-delay: 1s;"></div></div>
-        <p id="label-text" style="margin-top: 20px; color: var(--main-blue);"></p>
+    <div id="info-panel">Waiting for scan...</div>
+    <div id="map"></div>
+    <button id="scan-btn" onclick="performScan()">SCAN START</button>
+    
+    <div id="distance-overlay">
+        <p>DISTANCE TO TARGET</p>
+        <div id="dist-num">0.0m</div>
     </div>
-
-    <div id="distance-val">0.0m</div>
-
-    <div id="debug-info">Waiting for sensors...</div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    let appMode = '';
-    const targetPos = { lat: 35.681236, lon: 139.767125 }; // 仮目的地（東京駅）。テスト時は変更してください。
+    let mode = '';
+    let map, userMarker, sectorPolygon;
+    const targetPos = [35.681236, 139.767125]; // テスト用の目的地（東京駅）
+    let currentHeading = 0;
+    let currentDist = 0;
 
-    async function startApp(mode) {
-        appMode = mode;
+    async function init(selectedMode) {
+        mode = selectedMode;
         document.getElementById('setup').style.display = 'none';
-        document.getElementById('game-screen').style.display = 'flex';
-        
-        const label = document.getElementById('label-text');
-        if(mode === 'navigator') {
-            document.getElementById('pointer-container').style.display = 'block';
-            label.innerText = "方向を合わせて進め";
-        } else {
-            document.getElementById('ripple-container').style.display = 'block';
-            label.innerText = "3本指タップで解析";
-        }
+        document.getElementById('game-screen').style.display = 'block';
 
-        // 1. 方位センサーの許可 (iOS対応)
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            try {
-                const permission = await DeviceOrientationEvent.requestPermission();
-                if (permission === 'granted') {
-                    window.addEventListener('deviceorientation', updateOrientation);
-                }
-            } catch (e) { alert("センサー許可に失敗しました"); }
-        } else {
-            window.addEventListener('deviceorientation', updateOrientation);
-        }
+        // マップ初期化（最初はズームアウト）
+        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([35.68, 139.76], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-        // 2. 位置情報の開始
-        if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition(updateLocation, (err) => {
-                document.getElementById('debug-info').innerText = `GPS Error: ${err.message}`;
-            }, { enableHighAccuracy: true });
-        }
+        // 目的地マーカー（透明に近い円で表示）
+        L.circle(targetPos, { radius: 10, color: 'red', fillOpacity: 0.5 }).addTo(map);
 
-        // 3. 3本指タップイベントの登録
+        // ユーザーマーカー
+        userMarker = L.circleMarker([0,0], { radius: 8, color: '#fff', fillColor: '#00f2ff', fillOpacity: 1 }).addTo(map);
+
+        // ナビ機用の扇形（初期は非表示）
+        sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.3 }).addTo(map);
+
+        // 3本指タップ（2台目用）
         window.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 3) {
-                document.body.classList.add('analyze');
-                if (navigator.vibrate) navigator.vibrate([50]);
+            if (mode === 'dowser' && e.touches.length === 3) document.body.classList.add('analyze');
+        });
+        window.addEventListener('touchend', () => document.body.classList.remove('analyze'));
+    }
+
+    // スキャン実行（ボタン押下時のみ動作）
+    async function performScan() {
+        const info = document.getElementById('info-panel');
+        info.innerText = "Scanning...";
+
+        // 1. 方位取得
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') {
+                window.addEventListener('deviceorientation', captureOrientation, { once: true });
             }
-        });
-        window.addEventListener('touchend', () => {
-            document.body.classList.remove('analyze');
-        });
+        } else {
+            window.addEventListener('deviceorientation', captureOrientation, { once: true });
+        }
+
+        // 2. 位置情報取得
+        navigator.geolocation.getCurrentPosition((pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            
+            updateMap(lat, lon);
+            
+            // 距離計算
+            currentDist = calculateDistance(lat, lon, targetPos[0], targetPos[1]);
+            document.getElementById('dist-num').innerText = `${currentDist.toFixed(1)}m`;
+            
+            info.innerText = `Last Scan: ${new Date().toLocaleTimeString()}\nDist: ${currentDist.toFixed(1)}m`;
+
+            // 近接バイブ
+            if (currentDist < 20 && navigator.vibrate) navigator.vibrate(300);
+            
+        }, (err) => { alert("GPS Error: " + err.message); }, { enableHighAccuracy: true });
     }
 
-    function updateOrientation(e) {
-        // iOSの compassHeading または Androidの alpha
-        const heading = e.webkitCompassHeading || (360 - e.alpha);
-        if (heading && appMode === 'navigator') {
-            document.getElementById('pointer-container').style.transform = `rotate(${heading}deg)`;
+    function captureOrientation(e) {
+        currentHeading = e.webkitCompassHeading || (360 - e.alpha);
+        // 位置情報が確定した後にdrawSectorが呼ばれる
+    }
+
+    function updateMap(lat, lon) {
+        const pos = [lat, lon];
+        userMarker.setLatLng(pos);
+        
+        if (mode === 'navigator') {
+            map.setView(pos, 18); // ナビ機は高倍率
+            drawSector(lat, lon, currentHeading);
+        } else {
+            map.setView(pos, 16); // ダウジング機は中倍率
         }
     }
 
-    function updateLocation(pos) {
-        const myLat = pos.coords.latitude;
-        const myLon = pos.coords.longitude;
-        
-        const dist = calculateDistance(myLat, myLon, targetPos.lat, targetPos.lon);
-        
-        document.getElementById('distance-val').innerText = `${dist.toFixed(1)}m`;
-        document.getElementById('debug-info').innerText = `LAT: ${myLat.toFixed(4)} LON: ${myLon.toFixed(4)}`;
-        
-        // ダウジング機のみ、距離に応じてバイブレーション（20m以内）
-        if (appMode === 'dowser' && dist < 20) {
-            if (navigator.vibrate) navigator.vibrate(200);
+    // 扇形を描画するロジック
+    function drawSector(lat, lon, heading) {
+        if (!heading) return;
+        const radius = 0.0005; // 扇の長さ（約50m）
+        const points = [ [lat, lon] ];
+        const startAngle = (heading - 25) * Math.PI / 180;
+        const endAngle = (heading + 25) * Math.PI / 180;
+
+        for (let i = 0; i <= 10; i++) {
+            const angle = startAngle + (endAngle - startAngle) * (i / 10);
+            const ptLat = lat + radius * Math.cos(angle);
+            const ptLon = lon + radius * Math.sin(angle);
+            points.push([ptLat, ptLon]);
         }
+        sectorPolygon.setLatLngs(points);
     }
 
-    // 距離計算ロジック
     function calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371000; // 地球の半径 (m)
+        const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
