@@ -112,13 +112,31 @@
         sectorPolygon = L.polygon([], { color: '#00f2ff', weight: 1, fillOpacity: 0.4 }).addTo(map);
     }
 
-    async function performScan() {
-        document.getElementById('info-panel').innerText = "Scanning GPS...";
+   async function performScan() {
+    // localStorageから現在の目的地を読み込む
+    const cps = JSON.parse(localStorage.getItem('tetra_cps'));
+    const step = parseInt(localStorage.getItem('tetra_current_step'));
+    const target = cps[step];
 
-        navigator.geolocation.getCurrentPosition((pos) => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            
+    navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        
+        const dist = calculateDistance(lat, lon, target.lat, target.lon);
+        
+        // 到着判定 (15m以内)
+        if (dist <= 15) {
+            document.getElementById('scan-btn').innerText = "ENTER MISSION";
+            document.getElementById('scan-btn').style.background = "#ff4500";
+            document.getElementById('scan-btn').onclick = () => {
+                // 問題画面へ（問題番号をクエリパラメータで渡す）
+                location.href = `riddle.html?step=${step}`;
+            };
+        }
+
+        // ...（以下、地図更新や方位計算の既存コード）...
+    });
+}
             // 距離計算
             currentDist = calculateDistance(lat, lon, targetPos[0], targetPos[1]);
             document.getElementById('dist-num').innerText = `${currentDist.toFixed(1)}m`;
