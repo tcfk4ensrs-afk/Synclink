@@ -72,42 +72,53 @@
         analyser.getByteFrequencyData(dataArray);
         const bars = document.querySelectorAll('.bar');
         
+        let totalEnergy = 0;
         let low = 0, mid = 0, high = 0;
+
         for (let i = 0; i < dataArray.length; i++) {
             if (bars[i/4|0]) {
                 bars[i/4|0].style.height = `${dataArray[i] * 0.6}px`;
             }
-            
+            totalEnergy += dataArray[i];
             // 周波数帯の分類
             if (i < 8) low += dataArray[i];
             else if (i < 20) mid += dataArray[i];
             else high += dataArray[i];
         }
 
+        const avg = totalEnergy / dataArray.length;
         let isMatch = false;
-        // 判定ロジックの調整
-        if (playMode === 'navigator') {
-            // アイリスアウト：低域が中高域よりも圧倒的に強い（ゆったりしたバラード・ミドルテンポ想定）
-            if (low > 300 && low > high * 2.0) isMatch = true;
-        } else {
-            // KICK BACK：全域が激しく、特に高域（ドラムの金属音など）が強く出る
-            if (high > 400 && mid > 400 && low > 400) isMatch = true;
+
+        // --- 屋外・ノイズ対策ロジック ---
+        // 1. 環境音（無音）や爆音ノイズ（タップ）を弾く
+        if (avg > 15 && avg < 160) {
+            if (playMode === 'navigator') {
+                // アイリスアウト：低域が全体の約半分(48%)以上を占めているか
+                if (low / totalEnergy > 0.48) isMatch = true;
+            } else {
+                // KICK BACK：中高域にエネルギーが集中しているか
+                if ((high + mid) / totalEnergy > 0.65) isMatch = true;
+            }
         }
 
         if (isMatch) {
-            matchScore++;
-            const progress = Math.min(100, (matchScore / 150 * 100) | 0);
+            // 一致スコアを大きく加点（約3秒で満点へ）
+            matchScore += 2;
+            const progress = Math.min(100, (matchScore / 100 * 100) | 0);
             document.getElementById('status').innerText = `SYNCING... ${progress}%`;
             document.getElementById('status').style.color = "#afff00";
         } else {
-            if (matchScore > 0) matchScore -= 0.5; // 外れると少しずつ減衰
+            // 外れている間はゆっくり減衰（一瞬のノイズでリセットされないように）
+            if (matchScore > 0) matchScore -= 0.4;
             document.getElementById('status').style.color = "gold";
         }
 
-        if (matchScore >= 150) {
+        // 判定完了（スコア100到達）
+        if (matchScore >= 100) {
             document.getElementById('status').innerText = "VIBRATION MATCHED";
             document.getElementById('status').style.color = "#afff00";
-            document.getElementById('finish-btn').style.display = 'block';
+            // 判定成功後、即座にクリア画面へ移行
+            complete();
             cancelAnimationFrame(animationId);
             return;
         }
@@ -116,7 +127,7 @@
     }
 
     function complete() {
-        // 1. 画面をクリア表示に書き換える
+        // 1. 画面をクリア表示（紫ベース）に書き換える
         document.body.innerHTML = `
             <div style="
                 background: #000; 
@@ -128,10 +139,8 @@
                 align-items: center; 
                 font-family: 'Courier New', monospace;
             ">
-                <!-- MISSION COMPLETEを紫に -->
                 <h2 style="color: #bc00ff; text-shadow: 0 0 20px #bc00ff; margin-bottom: 30px;">MISSION COMPLETE</h2>
                 
-                <!-- 合言葉を紫に（少し明るめの紫にしています） -->
                 <div style="font-size: 3.5rem; color: #e066ff; letter-spacing: 10px; margin-bottom: 20px; text-shadow: 0 0 10px #bc00ff;">
                     ①さ　②ん　④く
                 </div>
@@ -152,7 +161,6 @@
             </div>
         `;
 
-        // 2. Hubへ戻るボタンのイベント（以下、ロジックは同じ）
         document.getElementById('go-hub').onclick = () => {
             alert("【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！");
             localStorage.setItem('tetra_current_step', 3);
