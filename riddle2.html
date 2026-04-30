@@ -67,9 +67,9 @@
         if (e.touches.length === 3) {
             document.body.classList.add('inverted');
             
-            // CP3つ回れている（stepが3以上）なら「わ」を「つ」に書き換える
+            // CP3つ回れている（stepが3以上）なら「わ」を「く」に書き換える
             if (currentStep >= 3) {
-                document.getElementById('char-wa').innerText = "⑧つ";
+                document.getElementById('char-wa').innerText = "⑧く";
                 if (navigator.vibrate) navigator.vibrate(50);
             }
         }
