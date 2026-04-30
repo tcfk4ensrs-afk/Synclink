@@ -3,82 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tetra-Mission</title>
+    <title>Tetra-Mission 1 | Zoom Out Edition</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --main-blue: #00f2ff; }
-        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; text-align: center; }
-        
-        #mission-ui { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
-        
-        /* 通常時は黒に近い文字で隠蔽 */
-        .hidden-text { color: #010101; font-size: 2rem; font-weight: bold; margin-top: 20px; transition: color 0.1s; filter: blur(1px); }
-        
-        /* 色反転モード (3本指タップ時) */
-        body.inverted { filter: invert(1); background: transparent; }
-        body.inverted .hidden-text { color: red; filter: blur(0); } /* 反転で見えるようになる */
+        :root { --main-blue: #00f2ff; --grid-bg-green: #8fd376; }
+        body { 
+            margin: 0; background: #000; color: white; font-family: "Meiryo", sans-serif;
+            overflow: hidden; height: 100vh; text-align: center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
 
-        #clear-btn { display: none; margin-top: 30px; padding: 15px; border: 2px solid var(--main-blue); background: transparent; color: var(--main-blue); }
+        #mission-ui { width: 95%; max-width: 500px; z-index: 10; }
+        
+        .hint-text { font-size: 0.9rem; margin-bottom: 25px; letter-spacing: 1px; background: rgba(0,0,0,0.7); padding: 5px; }
+
+        /* グリッド外枠のコンテナ：ここでズームアニメーションを制御 */
+        .viewport {
+            overflow: hidden;
+            border: 2px solid #555;
+            background: #fff;
+            margin: 0 auto;
+            width: 300px; /* 固定サイズ */
+            height: 300px;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            width: 100%;
+            height: 100%;
+            /* 初期状態：中央5x5が見えるように約1.4倍ズームし、中央に寄せる */
+            transform: scale(1.4);
+            transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ズームアウト実行時の状態（本来の7x7を表示） */
+        body.revealed .grid-container {
+            transform: scale(1);
+        }
+
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-size: 1.1rem;
+            border: 0.5px solid #333;
+            box-sizing: border-box;
+            background-color: #fff;
+            transition: background-color 0.8s, opacity 0.8s;
+        }
+
+        /* 中央の緑マス */
+        .cell.green { background-color: var(--grid-bg-green); }
+
+        /* 外周の白マス：最初は少し暗くしておく（任意） */
+        .cell.white { opacity: 0.3; }
+        body.revealed .cell.white { opacity: 1; }
+
+        .btn-next { 
+            margin-top: 30px; padding: 12px 40px; 
+            background: rgba(0,0,0,0.8); border: 2px solid var(--main-blue); color: var(--main-blue); 
+            font-weight: bold; border-radius: 30px; cursor: pointer;
+        }
+        
+        .ss-hint { color: #afff00; font-size: 0.8rem; margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="mission-ui">
-    <h2 id="step-title">MISSION</h2>
-    <p id="hint-text">三本の指で闇を暴き、<br>合言葉を解読せよ。</p>
-    
-    <div id="riddle-content">
-        <p>合言葉は...</p>
-        <div class="hidden-text" id="secret-msg">ネオンの三角錐</div>
+    <div id="mission-ui">
+        <h2>MISSION 01</h2>
+        <div class="hint-text">
+            ③：5個しかない文字　⑤：1つしかない文字　⑦：3つしかない文字
+        </div>
+
+        <div class="viewport">
+            <div class="grid-container" id="puzzle-grid">
+                <!-- JSで生成 -->
+            </div>
+        </div>
+
+        <button class="btn-next" onclick="finish()">次へ</button>
+        <p class="ss-hint">（スクリーンショット推奨）</p>
     </div>
 
-    <button id="clear-btn" onclick="clearMission()">合言葉を確認した</button>
-</div>
-
 <script>
-    const params = new URLSearchParams(location.search);
-    const step = parseInt(params.get('step') || "0");
-    document.getElementById('step-title').innerText = `MISSION ${step + 1}`;
+    const gridData = [
+        ["け", "す", "け", "さ", "け", "さ", "さ"],
+        ["す", "み", "よ", "よ", "か", "あ", "さ"],
+        ["け", "ふ", "か", "い", "さ", "い", "さ"],
+        ["す", "あ", "ぬ", "か", "さ", "か", "さ"],
+        ["け", "い", "み", "か", "ふ", "ぬ", "さ"],
+        ["け", "み", "け", "い", "み", "さ", "つ"],
+        ["け", "さ", "さ", "つ", "さ", "つ", "さ"]
+    ];
 
-    // --- 第1問（色変え）ギミック ---
-    let clearTimeout = null;
+    const gridContainer = document.getElementById('puzzle-grid');
+    const currentStep = parseInt(localStorage.getItem('tetra_current_step') || "0");
 
-    if (step === 0) { // 第1問の場合
-        // 3本指タップ検知
-        window.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 3) {
-                document.body.classList.add('inverted');
-                if (navigator.vibrate) navigator.vibrate(50);
-                
-                // 3秒間反転し続けたらクリアボタンを出す（ヒントを読んだとみなす）
-                clearTimeout = setTimeout(() => {
-                    document.getElementById('clear-btn').style.display = 'block';
-                    document.getElementById('hint-text').innerText = "合言葉を入力せよ（今回はボタンでクリア）";
-                }, 3000);
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.innerText = gridData[r][c];
+            if (r >= 1 && r <= 5 && c >= 1 && c <= 5) {
+                cell.classList.add('green');
+            } else {
+                cell.classList.add('white');
             }
-        });
-
-        window.addEventListener('touchend', () => {
-            document.body.classList.remove('inverted');
-            if (clearTimeout) clearTimeout(clearTimeout);
-        });
+            gridContainer.appendChild(cell);
+        }
     }
 
-    // --- ミッションクリア処理 ---
-    function clearMission() {
-        // CP1(step 0) をクリアした瞬間の処理
-        if (step === 0) {
-            // 能力解放の通知
-            alert("【MISSION 01 COMPLETE】\n\n【SYSTEM UPGRADE】\n能力：JUMP が解放されました！\n\n[操作方法]\nsearch画面で『上スワイプ』をすると、30秒間だけ高度を上げ、広域マップを確認できます。");
-            
-            // 進捗を1に更新
-            localStorage.setItem('tetra_current_step', 1);
-        } else {
-            // もしこのファイルを他のステップで使い回す場合の汎用処理
-            alert("ミッションクリア！");
-            localStorage.setItem('tetra_current_step', step + 1);
+    let startY = 0;
+    window.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; });
+    window.addEventListener('touchend', (e) => {
+        const endY = e.changedTouches[0].clientY;
+        // 上スワイプ操作
+        if (currentStep >= 3 && startY - endY > 80) {
+            document.body.classList.add('revealed');
+            if (navigator.vibrate) navigator.vibrate([50, 30, 100]);
         }
-        
-        // クリア後はHubに戻って全体図を確認させる
+    });
+
+    function finish() {
+        alert("【MISSION 01 COMPLETE】\n能力：JUMP 解放。");
+        if (currentStep < 1) localStorage.setItem('tetra_current_step', 1);
         location.href = 'hub.html';
     }
 </script>
