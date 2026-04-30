@@ -128,9 +128,11 @@
                 align-items: center; 
                 font-family: 'Courier New', monospace;
             ">
-                <h2 style="color: gold; margin-bottom: 30px;">MISSION COMPLETE</h2>
+                <!-- MISSION COMPLETEを紫に -->
+                <h2 style="color: #bc00ff; text-shadow: 0 0 20px #bc00ff; margin-bottom: 30px;">MISSION COMPLETE</h2>
                 
-                <div style="font-size: 3rem; letter-spacing: 10px; margin-bottom: 20px;">
+                <!-- 合言葉を紫に（少し明るめの紫にしています） -->
+                <div style="font-size: 3.5rem; color: #e066ff; letter-spacing: 10px; margin-bottom: 20px; text-shadow: 0 0 10px #bc00ff;">
                     ①さ　②ん　④く
                 </div>
                 
@@ -141,22 +143,19 @@
                 <button id="go-hub" style="
                     padding: 15px 30px; 
                     background: transparent; 
-                    border: 2px solid var(--main-blue); 
-                    color: var(--main-blue); 
+                    border: 2px solid #bc00ff; 
+                    color: #bc00ff; 
                     border-radius: 30px;
                     cursor: pointer;
+                    box-shadow: 0 0 10px #bc00ff;
                 ">能力を解放してHubへ戻る</button>
             </div>
         `;
 
-        // 2. Hubへ戻るボタンのイベント
+        // 2. Hubへ戻るボタンのイベント（以下、ロジックは同じ）
         document.getElementById('go-hub').onclick = () => {
-            alert("【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！\n\nhub画面のマーカーから自由に転送が可能です。");
-            
-            // 進捗を3（全制覇）に更新
+            alert("【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！");
             localStorage.setItem('tetra_current_step', 3);
-            
-            // Hub画面へ戻る
             location.href = 'hub.html';
         };
     }
