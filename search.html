@@ -59,14 +59,17 @@
 
     async function init(selectedMode) {
         mode = selectedMode;
+        // 役割を保存（riddle3で使用）
+        localStorage.setItem('tetra_play_mode', mode);
+        
         document.getElementById('setup').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
+        
         const { cps, step, origin } = getGameData();
         if (!cps) { alert("データがありません。"); return; }
         
         if (mode === 'navigator') {
             document.getElementById('map').style.display = 'block';
-            // 全クリア時は原点をターゲットとして地図を初期化
             const targetPos = (step >= 3) ? origin : cps[step];
             initMap(targetPos);
             setupJumpGesture();
@@ -112,11 +115,8 @@
             const touchEndY = e.changedTouches[0].clientY;
             if (mode === 'navigator' && !isJumping && touchStartY - touchEndY > 120) {
                 const { step } = getGameData();
-                if (step >= 1) {
-                    executeJump();
-                } else {
-                    showMessage("LOCK: JUMP能力は未解放です");
-                }
+                if (step >= 1) executeJump();
+                else showMessage("LOCK: JUMP能力は未解放です");
             }
         });
     }
@@ -152,20 +152,15 @@
             currentDist = calculateDistance(lat, lon, target.lat, target.lon);
             const bearing = calculateBearing(lat, lon, target.lat, target.lon);
             
-            if (step >= 3) {
-                info.innerText = `FINAL MISSION: RETURN TO ORIGIN\nDistance: ${Math.round(currentDist)}m`;
-            } else {
-                info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
-            }
+            if (step >= 3) info.innerText = `FINAL MISSION: RETURN TO ORIGIN\nDistance: ${Math.round(currentDist)}m`;
+            else info.innerText = `Mission: CP${step+1}\nLast Scan: ${new Date().toLocaleTimeString()}`;
 
             if (mode === 'navigator') updateNavigatorUI(lat, lon, bearing, target);
             if (mode === 'dowser') startDowsingRipple(currentDist);
             if (navigator.vibrate) navigator.vibrate(100);
             
-            // 判定ロジック
-            if (currentDist <= 20) { // 原点またはCPに到着
+            if (currentDist <= 20) {
                 if (step >= 3) {
-                    // 最終儀式（CP4）の発動
                     alert("原点への帰還を確認。最終同期プロセスを開始します。");
                     showFinalRitualSetup();
                 } else {
