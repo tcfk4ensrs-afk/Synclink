@@ -116,14 +116,49 @@
     }
 
     function complete() {
-        // 最終能力解放のポップアップ通知
-        alert("【ALL MISSION COMPLETE】\n\n【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！\n\n[操作方法]\nhub画面の地図上のマーカーをタップすることで、過去の地点へ自由に転送することが可能です。");
+        // 1. 画面をクリア表示に書き換える
+        document.body.innerHTML = `
+            <div style="
+                background: #000; 
+                color: #fff; 
+                height: 100vh; 
+                display: flex; 
+                flex-direction: column; 
+                justify-content: center; 
+                align-items: center; 
+                font-family: 'Courier New', monospace;
+            ">
+                <h2 style="color: gold; margin-bottom: 30px;">MISSION COMPLETE</h2>
+                
+                <div style="font-size: 3rem; letter-spacing: 10px; margin-bottom: 20px;">
+                    ①さ　②ん　④く
+                </div>
+                
+                <p style="color: #afff00; font-weight: bold; margin-bottom: 40px;">
+                    （スクリーンショット推奨）
+                </p>
 
-        // 進捗を3（全制覇）に更新
-        localStorage.setItem('tetra_current_step', 3);
-        
-        // Hub画面へ戻る
-        location.href = 'hub.html';
+                <button id="go-hub" style="
+                    padding: 15px 30px; 
+                    background: transparent; 
+                    border: 2px solid var(--main-blue); 
+                    color: var(--main-blue); 
+                    border-radius: 30px;
+                    cursor: pointer;
+                ">能力を解放してHubへ戻る</button>
+            </div>
+        `;
+
+        // 2. Hubへ戻るボタンのイベント
+        document.getElementById('go-hub').onclick = () => {
+            alert("【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！\n\nhub画面のマーカーから自由に転送が可能です。");
+            
+            // 進捗を3（全制覇）に更新
+            localStorage.setItem('tetra_current_step', 3);
+            
+            // Hub画面へ戻る
+            location.href = 'hub.html';
+        };
     }
 </script>
 </body>
