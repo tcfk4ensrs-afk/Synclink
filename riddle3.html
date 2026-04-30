@@ -3,79 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tetra-Mission 3</title>
+    <title>Tetra-Mission 3 | Sound Sync</title>
     <style>
         :root { --main-blue: #00f2ff; }
-        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; text-align: center; }
-        #container { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        
-        /* 蓄光文字の演出 */
-        #secret-msg { 
-            font-size: 3rem; color: #010101; text-shadow: none; transition: 0.5s; 
-            letter-spacing: 0.5em;
-        }
-        body.darkness #secret-msg { 
-            color: #afff00; text-shadow: 0 0 20px #afff00; 
-        }
-
-        video { position: absolute; width: 1px; height: 1px; opacity: 0; }
-        #canvas { display: none; }
-        
-        .status { margin-bottom: 20px; color: var(--main-blue); }
+        body { margin: 0; background: #000; color: white; font-family: 'Courier New', monospace; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        #visualizer { width: 80%; height: 150px; display: flex; align-items: flex-end; gap: 3px; margin: 30px 0; }
+        .bar { flex: 1; background: var(--main-blue); min-height: 3px; transition: height 0.05s; box-shadow: 0 0 10px var(--main-blue); }
+        #status { font-size: 1.4rem; color: gold; margin-top: 20px; font-weight: bold; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
+        .target-title { font-size: 1.2rem; border: 2px solid var(--main-blue); padding: 15px 30px; margin-bottom: 20px; letter-spacing: 2px; }
+        #start-mic { padding: 20px 40px; background: var(--main-blue); color: #000; border: none; font-weight: bold; font-size: 1.2rem; border-radius: 50px; cursor: pointer; box-shadow: 0 0 20px var(--main-blue); }
+        #finish-btn { display:none; margin-top:20px; padding:20px 40px; border:2px solid #afff00; color:#afff00; background:rgba(175,255,0,0.1); font-weight: bold; font-size: 1.2rem; border-radius: 50px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div id="container">
-        <h2>FINAL MISSION</h2>
-        <div class="status" id="light-level">光を遮断せよ...</div>
-        
-        <div id="secret-msg">TRIANGLE</div>
-        
-        <p style="margin-top: 40px; font-size: 0.8rem;">背面カメラを手で完全に塞いでください</p>
-        <button id="finish-btn" style="display:none; margin-top:20px; padding:15px; border:2px solid #afff00; background:none; color:#afff00;" onclick="complete()">合言葉を確認した</button>
-    </div>
+    <h2 style="letter-spacing: 5px;">FINAL MISSION</h2>
+    <div class="target-title" id="target-song">LOADING ROLE...</div>
+    
+    <div id="visualizer"></div>
+    
+    <div id="status">Ready to Scan</div>
+    <p style="font-size: 0.8rem; opacity: 0.6; margin-top: 10px;">デバイスのマイクを音源に近づけてください</p>
 
-    <video id="v" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
+    <button id="start-mic">マイクを起動してスキャン</button>
+    
+    <button id="finish-btn" onclick="complete()">MISSION COMPLETE</button>
 
 <script>
-    async function startLightSensor() {
-        const video = document.getElementById('v');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+    // LocalStorageから役割を読み取る
+    const playMode = localStorage.getItem('tetra_play_mode') || 'navigator';
+    const targetSong = (playMode === 'navigator') ? "アイリスアウト" : "KICK BACK";
+    document.getElementById('target-song').innerText = `TARGET: ${targetSong}`;
 
+    let audioContext, analyser, dataArray;
+    let matchScore = 0;
+    let animationId;
+
+    document.getElementById('start-mic').onclick = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            video.srcObject = stream;
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
 
-            setInterval(() => {
-                canvas.width = 10;
-                canvas.height = 10;
-                ctx.drawImage(video, 0, 0, 10, 10);
-                const data = ctx.getImageData(0, 0, 10, 10).data;
-                
-                let brightness = 0;
-                for (let i = 0; i < data.length; i += 4) {
-                    brightness += (data[i] + data[i+1] + data[i+2]) / 3;
-                }
-                brightness /= (data.length / 4);
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            createVisualizer();
+            document.getElementById('start-mic').style.display = 'none';
+            document.getElementById('status').innerText = "LISTENING...";
+            analyze();
+        } catch (e) { 
+            alert("マイクの使用が拒否されました。設定を確認してください。"); 
+        }
+    };
 
-                if (brightness < 30) {
-                    document.body.classList.add('darkness');
-                    document.getElementById('light-level').innerText = "闇を確認。封印が解けました。";
-                    document.getElementById('finish-btn').style.display = 'block';
-                } else {
-                    document.body.classList.remove('darkness');
-                }
-            }, 500);
+    function createVisualizer() {
+        const v = document.getElementById('visualizer');
+        v.innerHTML = '';
+        for (let i = 0; i < 32; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            v.appendChild(bar);
+        }
+    }
 
-        } catch (e) { alert("カメラ権限が必要です"); }
+    function analyze() {
+        analyser.getByteFrequencyData(dataArray);
+        const bars = document.querySelectorAll('.bar');
+        
+        let low = 0, mid = 0, high = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+            if (bars[i/4|0]) {
+                bars[i/4|0].style.height = `${dataArray[i] * 0.6}px`;
+            }
+            
+            // 周波数帯の分類
+            if (i < 8) low += dataArray[i];
+            else if (i < 20) mid += dataArray[i];
+            else high += dataArray[i];
+        }
+
+        let isMatch = false;
+        // 判定ロジックの調整
+        if (playMode === 'navigator') {
+            // アイリスアウト：低域が中高域よりも圧倒的に強い（ゆったりしたバラード・ミドルテンポ想定）
+            if (low > 300 && low > high * 2.0) isMatch = true;
+        } else {
+            // KICK BACK：全域が激しく、特に高域（ドラムの金属音など）が強く出る
+            if (high > 400 && mid > 400 && low > 400) isMatch = true;
+        }
+
+        if (isMatch) {
+            matchScore++;
+            const progress = Math.min(100, (matchScore / 150 * 100) | 0);
+            document.getElementById('status').innerText = `SYNCING... ${progress}%`;
+            document.getElementById('status').style.color = "#afff00";
+        } else {
+            if (matchScore > 0) matchScore -= 0.5; // 外れると少しずつ減衰
+            document.getElementById('status').style.color = "gold";
+        }
+
+        if (matchScore >= 150) {
+            document.getElementById('status').innerText = "VIBRATION MATCHED";
+            document.getElementById('status').style.color = "#afff00";
+            document.getElementById('finish-btn').style.display = 'block';
+            cancelAnimationFrame(animationId);
+            return;
+        }
+
+        animationId = requestAnimationFrame(analyze);
     }
 
     function complete() {
         // 最終能力解放のポップアップ通知
-        alert("【ALL MISSION COMPLETE】\n\n【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！\n\n[操作方法]\nhub画面の地図上のマーカーをタップすることで、過去の地点へ自由に転送（ワープ）することが可能です。\n\n全ての地点は同期されました。Hubに戻り、最後の儀式を。");
+        alert("【ALL MISSION COMPLETE】\n\n【SYSTEM UPGRADE】\n最終能力：WARP が解放されました！\n\n[操作方法]\nhub画面の地図上のマーカーをタップすることで、過去の地点へ自由に転送することが可能です。");
 
         // 進捗を3（全制覇）に更新
         localStorage.setItem('tetra_current_step', 3);
@@ -83,8 +125,6 @@
         // Hub画面へ戻る
         location.href = 'hub.html';
     }
-
-    startLightSensor();
 </script>
 </body>
 </html>
