@@ -6,57 +6,89 @@
     <title>Tetra-Mission 2</title>
     <style>
         :root { --main-blue: #00f2ff; }
-        body { margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; height: 100vh; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        body { 
+            margin: 0; background: #000; color: white; font-family: monospace; 
+            overflow: hidden; height: 100vh; text-align: center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
         
-        #mission-container { transition: transform 1s, filter 1s; }
-        /* ジャンプ（俯瞰）演出 */
-        body.jumping #mission-container { transform: scale(0.1); filter: blur(2px); }
-        
-        .hint-box { border: 2px solid var(--main-blue); padding: 20px; margin: 20px; position: relative; width: 80%; max-width: 300px; }
-        .huge-symbol { font-size: 10rem; color: #111; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: -1; }
-        body.jumping .huge-symbol { color: var(--main-blue); }
+        #mission-ui { width: 90%; }
 
-        #clear-btn { display: none; margin-top: 30px; padding: 15px 40px; background: transparent; border: 2px solid gold; color: gold; font-weight: bold; border-radius: 10px; cursor: pointer; }
+        /* 文字列：初期状態で赤色 */
+        .code-display { 
+            font-size: 2.8rem; 
+            font-weight: bold; 
+            margin: 30px 0; 
+            letter-spacing: 5px;
+        }
+        
+        .red-text { color: red; }
+
+        /* 特殊条件：反転（3本指）時のみ青い「つ」にする */
+        body.inverted #char-wa { color: blue; }
+
+        .ss-hint { color: #afff00; font-weight: bold; margin-bottom: 20px; font-size: 0.9rem; }
+
+        .btn-next { 
+            margin-top: 30px; padding: 15px 50px; 
+            background: transparent; border: 2px solid var(--main-blue); color: var(--main-blue); 
+            font-weight: bold; border-radius: 30px; cursor: pointer; font-size: 1.1rem;
+        }
+        
+        /* 3本指タップ時の演出用（任意） */
+        body.inverted { background: #111; }
     </style>
 </head>
 <body>
 
-    <div id="mission-container">
+    <div id="mission-ui">
         <h2>MISSION 02</h2>
-        <p>「視点」を高く上げよ。<br>地上に描かれた巨大な印を読み解け。</p>
-        <div class="hint-box">
-            <p>この枠の中に印がある...</p>
-            <div class="huge-symbol">Ω</div> 
+        
+        <div class="code-display">
+            <span class="red-text">⑥い</span> 
+            <span id="char-wa" class="red-text">⑧わ</span> 
+            <span class="red-text">⑨れ</span>
         </div>
-        <p style="font-size: 0.8rem; color: #555;">(画面を長押ししてジャンプ)</p>
+
+        <p class="ss-hint">（スクリーンショット推奨）</p>
+
+        <button class="btn-next" onclick="finish()">次へ</button>
+        
+        <p style="font-size: 0.7rem; color: #555; margin-top: 40px;">
+            ※特殊な干渉を検知した場合、コードが書き換わることがあります。
+        </p>
     </div>
 
-    <button id="clear-btn" onclick="finish()">合言葉を確認した</button>
-
 <script>
-    let timer;
-    // 長押しでジャンプ（俯瞰）
-    window.addEventListener('touchstart', () => {
-        timer = setTimeout(() => {
-            document.body.classList.add('jumping');
-            document.getElementById('clear-btn').style.display = 'block';
-            if (navigator.vibrate) navigator.vibrate(100);
-        }, 1000);
+    const currentStep = parseInt(localStorage.getItem('tetra_current_step') || "0");
+
+    // 3本指タップ検知
+    window.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 3) {
+            document.body.classList.add('inverted');
+            
+            // CP3つ回れている（stepが3以上）なら「わ」を「つ」に書き換える
+            if (currentStep >= 3) {
+                document.getElementById('char-wa').innerText = "⑧つ";
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+        }
     });
 
     window.addEventListener('touchend', () => {
-        clearTimeout(timer);
-        document.body.classList.remove('jumping');
+        document.body.classList.remove('inverted');
+        // 指を離したら元の文字に戻す
+        document.getElementById('char-wa').innerText = "⑧わ";
     });
 
     function finish() {
-        // 能力解放のポップアップ通知
-        alert("【MISSION 02 COMPLETE】\n\n【SYSTEM UPGRADE】\n能力：ANALYZE が解放されました！\n\n[操作方法]\ndowserモード中、画面を『3本指で同時タップ』している間、ターゲットとの正確な距離を解析できます。");
-
-        // 進捗を2（CP3探索中）に更新
-        localStorage.setItem('tetra_current_step', 2);
+        alert("【MISSION 02 COMPLETE】\n\n能力：ANALYZE が解放されました。");
         
-        // Hub画面へ戻る
+        // ステップ進行
+        if (currentStep < 2) {
+            localStorage.setItem('tetra_current_step', 2);
+        }
+        
         location.href = 'hub.html';
     }
 </script>
