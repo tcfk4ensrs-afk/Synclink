@@ -8,16 +8,57 @@
     <style>
         :root { --main-blue: #00f2ff; }
         body { margin: 0; background: #fff; color: #333; font-family: monospace; overflow: hidden; height: 100vh; }
-        #map { width: 100%; height: 70vh; }
-        #ui-panel { height: 30vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: white; border-top: 3px solid var(--main-blue); }
-        .info-text { font-size: 1rem; color: var(--main-blue); margin-bottom: 20px; font-weight: bold; }
-        .btn-search { padding: 15px 40px; background: var(--main-blue); color: #000; border: none; font-weight: bold; border-radius: 30px; text-decoration: none; font-size: 1.2rem; cursor: pointer; }
+        
+        /* マップとUIパネルの比率を調整 */
+        #map { width: 100%; height: 60vh; }
+        #ui-panel { 
+            height: 40vh; display: flex; flex-direction: column; align-items: center; 
+            justify-content: flex-start; background: #000; color: white; 
+            border-top: 3px solid var(--main-blue); padding-top: 15px; box-sizing: border-box;
+        }
+
+        /* 指示文 */
+        .guide-msg { color: var(--main-blue); font-size: 0.8rem; margin-bottom: 10px; font-weight: bold; letter-spacing: 0.05em; }
+
+        /* 回答欄グリッドの再現 */
+        .answer-grid { display: flex; border: 1px solid #555; background: #fff; margin-bottom: 15px; box-shadow: 0 0 10px rgba(0,242,255,0.2); }
+        .ans-cell {
+            width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;
+            color: #000; font-weight: bold; border: 0.5px solid #000; font-size: 0.9rem;
+        }
+        /* 各マスの色定義 */
+        .c-purple { background-color: #df69c5; }
+        .c-green  { background-color: #8fd376; }
+        .c-red    { background-color: #ff0000; }
+        .c-blue   { background-color: #00b0f0; }
+        .c-white  { background-color: #ffffff; }
+
+        .info-text { font-size: 1rem; color: var(--main-blue); margin-bottom: 15px; font-weight: bold; }
+        .btn-search { padding: 12px 40px; background: var(--main-blue); color: #000; border: none; font-weight: bold; border-radius: 30px; text-decoration: none; font-size: 1.1rem; cursor: pointer; transition: 0.2s; }
+        .btn-search:active { opacity: 0.7; transform: scale(0.95); }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
+
 <div id="ui-panel">
+    <!-- 追加: 指示文 -->
+    <div class="guide-msg">各CPをめぐり文字を埋めて指示に従え</div>
+    
+    <!-- 追加: 回答欄UI -->
+    <div class="answer-grid">
+        <div class="ans-cell c-purple">①</div>
+        <div class="ans-cell c-purple">②</div>
+        <div class="ans-cell c-green">③</div>
+        <div class="ans-cell c-purple">④</div>
+        <div class="ans-cell c-white">⑤</div>
+        <div class="ans-cell c-red">⑥</div>
+        <div class="ans-cell c-blue">⑦</div>
+        <div class="ans-cell c-white">⑧</div>
+        <div class="ans-cell c-red">⑨</div>
+    </div>
+
     <div class="info-text" id="progress-info">SYSTEM READY</div>
     <button class="btn-search" id="action-btn" onclick="handleMainAction()">探索を開始する</button>
 </div>
@@ -28,16 +69,14 @@
     const origin = JSON.parse(localStorage.getItem('tetra_origin'));
     const currentStep = parseInt(localStorage.getItem('tetra_current_step') || "0");
 
-    // Hubマップ初期化
     const map = L.map('map', { zoomControl: true }).setView([origin.lat, origin.lon], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // --- 原点マーカーのワープ機能 ---
+    // 原点マーカー
     const originMarker = L.circleMarker([origin.lat, origin.lon], {
         radius: 10, color: 'blue', fillColor: '#00f2ff', fillOpacity: 0.9
     }).addTo(map);
     
-    // 原点ポップアップ
     let originPopup = `<div style="text-align:center; color:#000;"><b>START / ORIGIN</b><br>`;
     if (currentStep >= 3) {
         originPopup += `<p style="font-size:0.8rem;">全地点の同期完了</p>`;
@@ -48,9 +87,12 @@
     originPopup += `</div>`;
     originMarker.bindPopup(originPopup);
 
-    // 到達済みのCPを表示
+    // 到達済みのCPを表示 & 座標を配列に格納
+    let polyCoords = [];
     for (let i = 0; i < currentStep; i++) {
         const cp = cps[i];
+        polyCoords.push([cp.lat, cp.lon]); // 座標を蓄積
+
         const marker = L.circle([cp.lat, cp.lon], { radius: 40, color: "green", fillOpacity: 0.5 }).addTo(map);
         const photo = localStorage.getItem(`tetra_photo_${i+1}`);
         
@@ -64,6 +106,22 @@
         marker.bindPopup(popupContent);
     }
 
+    // 追加: 3地点を巡っている場合、三角形を薄く表示してイベントを追加
+    if (currentStep >= 3) {
+        const syncTriangle = L.polygon(polyCoords, {
+            color: 'gold',
+            weight: 2,
+            fillColor: 'gold',
+            fillOpacity: 0.2,
+            dashArray: '5, 5'
+        }).addTo(map);
+
+        // 三角形タップ時のポップアップ
+        syncTriangle.on('click', () => {
+            alert("まだ問題を完全に解けてないみたい");
+        });
+    }
+
     // UIパネル更新
     const infoPanel = document.getElementById('progress-info');
     const actionBtn = document.getElementById('action-btn');
@@ -75,7 +133,6 @@
         infoPanel.innerText = `到達状況: ${currentStep} / 3 地点`;
     }
 
-    // 下部ボタン：探索または儀式
     function handleMainAction() {
         if (currentStep >= 3) {
             warpToRitual();
@@ -84,14 +141,12 @@
         }
     }
 
-    // 最終儀式（原点ワープ）実行
     function warpToRitual() {
         if (confirm("全ての地点が同期されました。原点へ戻り、最終同期を開始しますか？")) {
-            location.href = 'search.html'; // search側のstep=3判定により儀式画面へ
+            location.href = 'search.html';
         }
     }
 
-    // 各CPへのワープ
     function warpToCP(stepIndex) {
         if(confirm(`CP${stepIndex+1} へワープしますか？`)) {
             let targetPage = "riddle.html";
