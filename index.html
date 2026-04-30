@@ -65,7 +65,7 @@
             localStorage.setItem('tetra_photo_0', imgData);
             
             // CP座標生成（正三角形）
-            const r = 0.009; // 半径1km (簡易)
+            const r = 0.0063; // 半径1km (簡易)
             const cps = [
                 { lat: originPos.lat + r, lon: originPos.lon },
                 { lat: originPos.lat - r/2, lon: originPos.lon + r * Math.sqrt(3)/2 },
